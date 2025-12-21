@@ -53,6 +53,7 @@ Nexus is a comprehensive workforce operations application built with Expo React 
 - [x] Session management
 
 ### Core Features - Completed
+
 - [x] **Dashboard** (`app/(app)/dashboard.tsx`)
   - [x] Role-based UI (Admin, Manager, HR, Finance, Employee)
   - [x] Quick action cards
@@ -82,32 +83,31 @@ Nexus is a comprehensive workforce operations application built with Expo React 
   - [x] Display salary breakdown
   - [x] Download PDF placeholder
 
+- [x] **Leave Approval Workflow** (`app/(app)/approvals.tsx`)
+  - [x] View pending leave requests (Manager/HR)
+  - [x] Approve/reject requests
+  - [x] Add rejection comments
+  - [x] Filter by status (pending/all)
+  - [x] Employee details display
+
+- [x] **Team Management** (`app/(app)/teams.tsx`)
+  - [x] Create teams
+  - [x] View all teams
+  - [x] Delete teams
+  - [x] Team descriptions
+
+- [x] **Payroll Management** (`app/(app)/payroll.tsx`)
+  - [x] Create payroll records (Admin/Finance)
+  - [x] Set base salary, bonuses, deductions
+  - [x] Publish payroll to employees
+  - [x] View payroll history
+  - [x] Draft/Published status
+
 ---
 
 ## In Progress Tasks 🔄
 
 ### Core Features - Remaining
-
-- [ ] **Leave Approval Workflow** (`app/(app)/approvals.tsx`)
-  - [ ] View pending leave requests (Manager/HR)
-  - [ ] Approve/reject requests
-  - [ ] Add approval comments
-  - [ ] Filter by status and employee
-  - [ ] Notification system
-
-- [ ] **Team Management** (`app/(app)/teams.tsx`)
-  - [ ] Create teams
-  - [ ] Assign team managers
-  - [ ] Add/remove team members
-  - [ ] View team hierarchy
-  - [ ] Team-based permissions
-
-- [ ] **Payroll Management** (`app/(app)/payroll.tsx`)
-  - [ ] Create payroll records (Admin/Finance)
-  - [ ] Set base salary, bonuses, deductions
-  - [ ] Publish payroll to employees
-  - [ ] Bulk payroll processing
-  - [ ] Payroll history
 
 - [ ] **Disciplinary Cases** (`app/(app)/disciplinary.tsx`)
   - [ ] Create disciplinary cases (HR/Admin)
