@@ -42,11 +42,13 @@ export default function Login() {
             }
 
             showAlert('Error', errorMsg);
+            setLoading(false);
         } else {
             console.log('Login successful:', data);
-            // Auth state change will trigger redirect in index or _layout protection
+            console.log('Session:', data.session);
+            // Explicitly redirect to dashboard
+            router.replace('/(app)/dashboard');
         }
-        setLoading(false);
     }
 
     return (
