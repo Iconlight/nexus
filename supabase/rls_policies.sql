@@ -10,10 +10,13 @@ ALTER TABLE public.disciplinary_cases ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
 
 -- Helper function to get current user profile
-CREATE OR REPLACE FUNCTION public.get_my_claim(claim TEXT) 
-RETURNS TEXT AS $$
-  SELECT coalesce(current_setting('request.jwt.claims', true)::jsonb->>'app_metadata'->>claim, '')
-$$ LANGUAGE sql STABLE;
+-- Note: This function is not currently used in the policies below
+-- If needed in the future, it would require proper JSON path handling
+-- CREATE OR REPLACE FUNCTION public.get_my_claim(claim TEXT) 
+-- RETURNS TEXT AS $$
+--   SELECT coalesce(current_setting('request.jwt.claims', true)::jsonb->'app_metadata'->claim, 'null'::jsonb)::text
+-- $$ LANGUAGE sql STABLE;
+
 
 -- 1. COMPANIES
 -- Only internal super admins or the creator (if we had a SaaS sign-up flow) can view companies normally.
