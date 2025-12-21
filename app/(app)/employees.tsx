@@ -75,9 +75,17 @@ export default function Employees() {
         setInviting(true);
 
         try {
+            // Get session token
+            const { data: { session } } = await supabase.auth.getSession();
+
+            if (!session) {
+                throw new Error('Not authenticated');
+            }
+
             // Call Edge Function to invite employee
             const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-            const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+
+            console.log('Inviting employee:', { firstName, lastName, email, role });
 
             const response = await fetch(
                 `${supabaseUrl}/functions/v1/invite-employee`,
@@ -85,7 +93,7 @@ export default function Employees() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${supabaseKey}`,
+                        'Authorization': `Bearer ${session.access_token}`, // Use session token instead of anon key
                     },
                     body: JSON.stringify({
                         firstName,
@@ -99,11 +107,13 @@ export default function Employees() {
 
             const data = await response.json();
 
+            console.log('Invite response:', { status: response.status, data });
+
             if (!response.ok) {
                 throw new Error(data.error || 'Failed to invite employee');
             }
 
-            const msg = 'Employee invited successfully! They will receive an email with login instructions.';
+            const msg = `Employee invited successfully! Temporary password: ${data.tempPassword}`;
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
 
             // Reset form
@@ -117,6 +127,7 @@ export default function Employees() {
             // Reload employees
             loadEmployees();
         } catch (error: any) {
+            console.error('Invite error:', error);
             const msg = error.message || 'Failed to invite employee';
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
         } finally {
@@ -208,10 +219,37 @@ export default function Employees() {
                             </Text>
                             <Text style={styles.employeeEmail}>{emp.email}</Text>
                         </View>
-                        <View style={[styles.badge, !emp.is_active && styles.inactiveBadge]}>
-                            <Text style={styles.badgeText}>
-                                {emp.role.toUpperCase()}
-                            </Text>
+                        <View style={styles.employeeActions}>
+                            <View style={[styles.badge, !emp.is_active && styles.inactiveBadge]}>
+                                <Text style={styles.badgeText}>
+                                    {emp.role.toUpperCase()}
+                                </Text>
+                            </View>
+                            <Button
+                                title="Edit Role"
+                                onPress={async () => {
+                                    // Simple role rotation for now
+                                    const roles = ['employee', 'manager', 'hr', 'finance', 'admin'];
+                                    const currentIndex = roles.indexOf(emp.role);
+                                    const nextRole = roles[(currentIndex + 1) % roles.length];
+
+                                    try {
+                                        const { error } = await supabase
+                                            .from('profiles')
+                                            .update({ role: nextRole })
+                                            .eq('id', emp.id);
+
+                                        if (error) throw error;
+
+                                        const msg = `Role updated to ${nextRole}`;
+                                        Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
+                                        loadEmployees();
+                                    } catch (error: any) {
+                                        const msg = error.message || 'Failed to update role';
+                                        Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+                                    }
+                                }}
+                            />
                         </View>
                     </View>
                 ))}
@@ -298,6 +336,11 @@ const styles = StyleSheet.create({
     },
     employeeInfo: {
         flex: 1,
+    },
+    employeeActions: {
+        flexDirection: 'column',
+        alignItems: 'flex-end',
+        gap: 8,
     },
     employeeName: {
         fontSize: 16,
