@@ -9,6 +9,7 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@expo/metro-runtime": "~6.1.2",
     "@supabase/supabase-js": "^2.89.0",
     "expo": "~54.0.30",

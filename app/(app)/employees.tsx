@@ -10,6 +10,10 @@ type Employee = {
     email: string;
     role: string;
     is_active: boolean;
+    job_title?: string;
+    working_days_per_week?: number;
+    working_hours_per_day?: number;
+    allowed_leave_days?: number;
 };
 
 export default function Employees() {
@@ -17,6 +21,7 @@ export default function Employees() {
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [showInviteForm, setShowInviteForm] = useState(false);
+    const [showInactive, setShowInactive] = useState(false);
 
     // Invite form state
     const [firstName, setFirstName] = useState('');
@@ -24,6 +29,11 @@ export default function Employees() {
     const [email, setEmail] = useState('');
     const [phone, setPhone] = useState('');
     const [role, setRole] = useState('employee');
+    const [jobTitle, setJobTitle] = useState('');
+    const [workingDays, setWorkingDays] = useState('5');
+    const [workingHours, setWorkingHours] = useState('8');
+    const [leaveDays, setLeaveDays] = useState('21');
+    const [baseSalary, setBaseSalary] = useState('');
     const [inviting, setInviting] = useState(false);
 
     useEffect(() => {
@@ -58,8 +68,8 @@ export default function Employees() {
     }
 
     async function inviteEmployee() {
-        if (!firstName || !lastName || !email) {
-            const msg = 'Please fill in all required fields';
+        if (!firstName || !lastName || !email || !jobTitle || !baseSalary) {
+            const msg = 'Please fill in all required fields (name, email, job title, base salary)';
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
             return;
         }
@@ -101,6 +111,11 @@ export default function Employees() {
                         email,
                         phone,
                         role,
+                        jobTitle,
+                        workingDays: parseInt(workingDays),
+                        workingHours: parseFloat(workingHours),
+                        allowedLeaveDays: parseInt(leaveDays),
+                        baseSalary: parseFloat(baseSalary),
                     }),
                 }
             );
@@ -113,7 +128,7 @@ export default function Employees() {
                 throw new Error(data.error || 'Failed to invite employee');
             }
 
-            const msg = `Employee invited successfully! Temporary password: ${data.tempPassword}`;
+            const msg = 'Employee invited successfully! Invitation email sent with login credentials.';
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
 
             // Reset form
@@ -122,6 +137,11 @@ export default function Employees() {
             setEmail('');
             setPhone('');
             setRole('employee');
+            setJobTitle('');
+            setWorkingDays('5');
+            setWorkingHours('8');
+            setLeaveDays('21');
+            setBaseSalary('');
             setShowInviteForm(false);
 
             // Reload employees
@@ -132,6 +152,42 @@ export default function Employees() {
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
         } finally {
             setInviting(false);
+        }
+    }
+
+    async function removeEmployee(employeeId: string, employeeName: string) {
+        const confirmMsg = `Are you sure you want to remove ${employeeName}? They will be deactivated and unable to login.`;
+
+        const confirmed = Platform.OS === 'web'
+            ? window.confirm(confirmMsg)
+            : await new Promise((resolve) => {
+                Alert.alert(
+                    'Confirm Removal',
+                    confirmMsg,
+                    [
+                        { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                        { text: 'Remove', style: 'destructive', onPress: () => resolve(true) }
+                    ]
+                );
+            });
+
+        if (!confirmed) return;
+
+        try {
+            // Soft delete: set is_active to false
+            const { error } = await supabase
+                .from('profiles')
+                .update({ is_active: false })
+                .eq('id', employeeId);
+
+            if (error) throw error;
+
+            const msg = `${employeeName} has been removed successfully`;
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
+            loadEmployees();
+        } catch (error: any) {
+            const msg = error.message || 'Failed to remove employee';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
         }
     }
 
@@ -188,6 +244,62 @@ export default function Employees() {
                         keyboardType="phone-pad"
                     />
 
+                    <Text style={styles.label}>Job Title *</Text>
+                    <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Software Engineer"
+                        value={jobTitle}
+                        onChangeText={setJobTitle}
+                    />
+
+                    <Text style={styles.label}>Working Schedule</Text>
+                    <View style={styles.row}>
+                        <View style={styles.halfInput}>
+                            <Text style={styles.subLabel}>Days/Week *</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="5"
+                                value={workingDays}
+                                onChangeText={setWorkingDays}
+                                keyboardType="numeric"
+                            />
+                        </View>
+                        <View style={styles.halfInput}>
+                            <Text style={styles.subLabel}>Hours/Day *</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="8"
+                                value={workingHours}
+                                onChangeText={setWorkingHours}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+
+                    <Text style={styles.label}>Compensation & Benefits</Text>
+                    <View style={styles.row}>
+                        <View style={styles.halfInput}>
+                            <Text style={styles.subLabel}>Leave Days/Year *</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="21"
+                                value={leaveDays}
+                                onChangeText={setLeaveDays}
+                                keyboardType="numeric"
+                            />
+                        </View>
+                        <View style={styles.halfInput}>
+                            <Text style={styles.subLabel}>Base Salary *</Text>
+                            <TextInput
+                                style={styles.input}
+                                placeholder="5000"
+                                value={baseSalary}
+                                onChangeText={setBaseSalary}
+                                keyboardType="decimal-pad"
+                            />
+                        </View>
+                    </View>
+
                     <Text style={styles.label}>Role:</Text>
                     <View style={styles.roleButtons}>
                         {['employee', 'manager', 'hr', 'finance'].map((r) => (
@@ -209,50 +321,82 @@ export default function Employees() {
             )}
 
             <View style={styles.employeeList}>
-                <Text style={styles.sectionTitle}>Employees ({employees.length})</Text>
+                <View style={styles.listHeader}>
+                    <Text style={styles.sectionTitle}>Employees ({employees.filter(e => showInactive || e.is_active).length})</Text>
+                    <Button
+                        title={showInactive ? "Hide Inactive" : "Show Inactive"}
+                        onPress={() => setShowInactive(!showInactive)}
+                        color="#666"
+                    />
+                </View>
 
-                {employees.map((emp) => (
-                    <View key={emp.id} style={styles.employeeCard}>
-                        <View style={styles.employeeInfo}>
-                            <Text style={styles.employeeName}>
-                                {emp.first_name} {emp.last_name}
-                            </Text>
-                            <Text style={styles.employeeEmail}>{emp.email}</Text>
-                        </View>
-                        <View style={styles.employeeActions}>
-                            <View style={[styles.badge, !emp.is_active && styles.inactiveBadge]}>
-                                <Text style={styles.badgeText}>
-                                    {emp.role.toUpperCase()}
+                {employees
+                    .filter(emp => showInactive || emp.is_active)
+                    .map((emp) => (
+                        <View key={emp.id} style={[
+                            styles.employeeCard,
+                            !emp.is_active && styles.inactiveCard
+                        ]}>
+                            <View style={styles.employeeInfo}>
+                                <Text style={styles.employeeName}>
+                                    {emp.first_name} {emp.last_name}
+                                    {!emp.is_active && <Text style={styles.inactiveLabel}> (Inactive)</Text>}
                                 </Text>
+                                {emp.job_title && (
+                                    <Text style={styles.jobTitle}>{emp.job_title}</Text>
+                                )}
+                                <Text style={styles.employeeEmail}>{emp.email}</Text>
+                                {(emp.working_days_per_week || emp.working_hours_per_day || emp.allowed_leave_days) && (
+                                    <Text style={styles.employeeDetails}>
+                                        {emp.working_days_per_week && `${emp.working_days_per_week} days/week`}
+                                        {emp.working_hours_per_day && ` • ${emp.working_hours_per_day}h/day`}
+                                        {emp.allowed_leave_days && ` • ${emp.allowed_leave_days} leave days`}
+                                    </Text>
+                                )}
                             </View>
-                            <Button
-                                title="Edit Role"
-                                onPress={async () => {
-                                    // Simple role rotation for now
-                                    const roles = ['employee', 'manager', 'hr', 'finance', 'admin'];
-                                    const currentIndex = roles.indexOf(emp.role);
-                                    const nextRole = roles[(currentIndex + 1) % roles.length];
+                            <View style={styles.employeeActions}>
+                                <View style={[styles.badge, !emp.is_active && styles.inactiveBadge]}>
+                                    <Text style={styles.badgeText}>
+                                        {emp.role.toUpperCase()}
+                                    </Text>
+                                </View>
+                                {emp.is_active && (
+                                    <>
+                                        <Button
+                                            title="Edit Role"
+                                            onPress={async () => {
+                                                // Simple role rotation for now
+                                                const roles = ['employee', 'manager', 'hr', 'finance', 'admin'];
+                                                const currentIndex = roles.indexOf(emp.role);
+                                                const nextRole = roles[(currentIndex + 1) % roles.length];
 
-                                    try {
-                                        const { error } = await supabase
-                                            .from('profiles')
-                                            .update({ role: nextRole })
-                                            .eq('id', emp.id);
+                                                try {
+                                                    const { error } = await supabase
+                                                        .from('profiles')
+                                                        .update({ role: nextRole })
+                                                        .eq('id', emp.id);
 
-                                        if (error) throw error;
+                                                    if (error) throw error;
 
-                                        const msg = `Role updated to ${nextRole}`;
-                                        Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
-                                        loadEmployees();
-                                    } catch (error: any) {
-                                        const msg = error.message || 'Failed to update role';
-                                        Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
-                                    }
-                                }}
-                            />
+                                                    const msg = `Role updated to ${nextRole}`;
+                                                    Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
+                                                    loadEmployees();
+                                                } catch (error: any) {
+                                                    const msg = error.message || 'Failed to update role';
+                                                    Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+                                                }
+                                            }}
+                                        />
+                                        <Button
+                                            title="Remove"
+                                            onPress={() => removeEmployee(emp.id, `${emp.first_name} ${emp.last_name}`)}
+                                            color="#d32f2f"
+                                        />
+                                    </>
+                                )}
+                            </View>
                         </View>
-                    </View>
-                ))}
+                    ))}
             </View>
         </ScrollView>
     );
@@ -305,6 +449,12 @@ const styles = StyleSheet.create({
         fontWeight: '600',
         marginBottom: 8,
         marginTop: 8,
+    },
+    subLabel: {
+        fontSize: 12,
+        fontWeight: '500',
+        marginBottom: 4,
+        color: '#666',
     },
     roleButtons: {
         flexDirection: 'row',
@@ -362,6 +512,40 @@ const styles = StyleSheet.create({
     },
     badgeText: {
         color: '#1976d2',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    row: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    halfInput: {
+        flex: 1,
+    },
+    listHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 12,
+    },
+    jobTitle: {
+        fontSize: 14,
+        fontWeight: '600',
+        color: '#2196f3',
+        marginBottom: 2,
+    },
+    employeeDetails: {
+        fontSize: 12,
+        color: '#999',
+        marginTop: 4,
+    },
+    inactiveCard: {
+        opacity: 0.6,
+        backgroundColor: '#f5f5f5',
+    },
+    inactiveLabel: {
+        color: '#d32f2f',
         fontSize: 12,
         fontWeight: '600',
     },

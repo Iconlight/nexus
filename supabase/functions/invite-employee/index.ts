@@ -66,7 +66,12 @@ serve(async (req) => {
             lastName,
             email,
             phone,
-            role = 'employee'
+            role = 'employee',
+            jobTitle,
+            workingDays = 5,
+            workingHours = 8,
+            allowedLeaveDays = 21,
+            baseSalary
         } = await req.json()
 
         // Validate input
@@ -106,6 +111,10 @@ serve(async (req) => {
                 email,
                 phone,
                 role,
+                job_title: jobTitle,
+                working_days_per_week: workingDays,
+                working_hours_per_day: workingHours,
+                allowed_leave_days: allowedLeaveDays,
                 is_active: true
             })
 
@@ -115,15 +124,96 @@ serve(async (req) => {
             throw new Error(`Failed to create profile: ${profileInsertError.message}`)
         }
 
-        // TODO: Send invitation email with temporary password
-        // For now, we'll just return the temp password (in production, send via email)
+        // Create initial payroll record if base salary provided
+        if (baseSalary) {
+            const currentDate = new Date()
+            const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1)
+
+            const { error: payrollError } = await supabaseAdmin
+                .from('payroll_records')
+                .insert({
+                    company_id: adminProfile.company_id,
+                    employee_id: authData.user.id,
+                    month: firstDayOfMonth.toISOString().split('T')[0],
+                    base_salary: baseSalary,
+                    bonuses: 0,
+                    deductions: 0,
+                    net_salary: baseSalary,
+                    status: 'draft'
+                })
+
+            if (payrollError) {
+                console.error('Failed to create payroll:', payrollError)
+                // Don't fail the whole operation, just log the error
+            }
+        }
+
+        // Send invitation email via EmailJS
+        try {
+            const emailJSServiceId = Deno.env.get('EMAILJS_SERVICE_ID') || 'service_89mlz15'
+            const emailJSPublicKey = '-498bHu_Q6ygG_PkWm'
+            const emailJSPrivateKey = Deno.env.get('EMAILJS_PRIVATE_KEY') || 'mpyoyRmPLIKMjh4d43ijU'
+
+            console.log('EmailJS Config:', {
+                serviceId: emailJSServiceId,
+                publicKey: emailJSPublicKey.substring(0, 5) + '...',
+                hasPrivateKey: !!emailJSPrivateKey
+            })
+
+            // Get company name
+            const { data: company } = await supabaseAdmin
+                .from('companies')
+                .select('name')
+                .eq('id', adminProfile.company_id)
+                .single()
+
+            const emailParams = {
+                to_email: email,
+                to_name: `${firstName} ${lastName}`,
+                company_name: company?.name || 'Your Company',
+                username: `${firstName} ${lastName}`,
+                temp_password: tempPassword,
+                job_title: jobTitle || 'Not specified',
+                working_days: workingDays,
+                working_hours: workingHours,
+                leave_days: allowedLeaveDays,
+                login_url: Deno.env.get('APP_URL') || 'https://your-app-url.com'
+            }
+
+            // EmailJS REST API v1.0 format
+            const emailResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    service_id: emailJSServiceId,
+                    template_id: 'template_employee_invite',
+                    user_id: emailJSPublicKey,
+                    accessToken: emailJSPrivateKey,
+                    template_params: emailParams
+                })
+            })
+
+            const emailResult = await emailResponse.text()
+
+            if (!emailResponse.ok) {
+                console.error('EmailJS Error Response:', emailResult)
+                console.error('EmailJS Status:', emailResponse.status)
+            } else {
+                console.log('Email sent successfully:', emailResult)
+            }
+        } catch (emailError) {
+            console.error('Email sending error:', emailError)
+            // Don't fail the whole operation if email fails
+        }
 
         return new Response(
             JSON.stringify({
                 success: true,
-                message: 'Employee invited successfully',
+                message: 'Employee invited successfully. Invitation email sent.',
                 userId: authData.user.id,
-                tempPassword: tempPassword, // Remove this in production
+                // Don't return temp password - it's sent via email
             }),
             {
                 status: 200,
