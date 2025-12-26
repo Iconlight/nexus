@@ -1,8 +1,9 @@
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Platform, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Platform, Alert, TextInput } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
+import EmployeeDetailModal from '../../src/components/EmployeeDetailModal';
 
 type AttendanceRecord = {
     id: string;
@@ -44,6 +45,12 @@ export default function AttendanceReport() {
     const [presentCount, setPresentCount] = useState(0);
     const [absentCount, setAbsentCount] = useState(0);
 
+    // Search & Modal
+    const [searchQuery, setSearchQuery] = useState('');
+    const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [loadingStats, setLoadingStats] = useState(false);
+
     useEffect(() => {
         loadAttendanceData();
     }, []);
@@ -83,7 +90,10 @@ export default function AttendanceReport() {
                         last_name,
                         job_title,
                         email,
-                        role
+                        role,
+                        gender,
+                        base_salary,
+                        department:teams(name)
                     )
                 `)
                 .eq('company_id', profile.company_id)
@@ -131,6 +141,57 @@ export default function AttendanceReport() {
         loadAttendanceData();
     };
 
+    // Filter lists based on search
+    const filteredCheckedIn = checkedIn.filter(r =>
+        (r.employee.first_name + ' ' + r.employee.last_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        r.employee.role.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const filteredAbsent = absent.filter(e =>
+        (e.first_name + ' ' + e.last_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
+        e.role.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const filteredCompleted = completed.filter(r =>
+        (r.employee.first_name + ' ' + r.employee.last_name).toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    async function handleEmployeePress(employee: any) {
+        setSelectedEmployee(employee);
+        setShowDetailModal(true);
+        setLoadingStats(true); // Start loading stats
+
+        // Calculate Stats
+        // 1. Days Present (count logs)
+        // 2. Leave Used (sum leave requests)
+        // 3. Attendance Rate (Present / Working Days since started)
+
+        try {
+            // Mock stats for now to demonstrate UI (Implementation would require more RPCs or complex queries)
+            // In a real app, we'd fetch:
+            // - count(attendance_logs) where employee_id = id
+            // - count(leave_requests) where status = approved
+
+            // Simulating a fetch delay
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            const stats = {
+                daysPresent: Math.floor(Math.random() * 20) + 1, // Mock
+                daysAbsent: Math.floor(Math.random() * 5),
+                leavesUsed: Math.floor(Math.random() * 5),
+                leavesAllowed: employee.allowed_leave_days || 21,
+                attendanceRate: 85 + Math.random() * 15 // Mock 85-100%
+            };
+
+            setSelectedEmployee((prev: any) => ({ ...prev, stats }));
+
+        } catch (error) {
+            console.error('Error fetching stats:', error);
+        } finally {
+            setLoadingStats(false);
+        }
+    }
+
     function formatTime(isoString: string) {
         return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
@@ -151,6 +212,13 @@ export default function AttendanceReport() {
             <View style={styles.header}>
                 <Text style={styles.title}>Attendance Overview</Text>
                 <Text style={styles.date}>{new Date().toLocaleDateString()}</Text>
+
+                <TextInput
+                    style={styles.searchBar}
+                    placeholder="🔍 Search employees..."
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                />
             </View>
 
             {/* Stats Cards */}
@@ -177,20 +245,28 @@ export default function AttendanceReport() {
                 {checkedIn.length === 0 ? (
                     <Text style={styles.emptyText}>No one currently checked in</Text>
                 ) : (
-                    checkedIn.map(record => (
-                        <View key={record.id} style={styles.card}>
-                            <View style={styles.cardRow}>
-                                <View>
-                                    <Text style={styles.name}>
-                                        {record.employee.first_name} {record.employee.last_name}
-                                    </Text>
-                                    <Text style={styles.jobTitle}>{record.employee.job_title}</Text>
-                                </View>
-                                <View style={styles.timeBadge}>
-                                    <Text style={styles.timeText}>In: {formatTime(record.check_in_time)}</Text>
+                    filteredCheckedIn.map(record => (
+                        <TouchableOpacity key={record.id} onPress={() => handleEmployeePress({
+                            ...record.employee,
+                            id: record.employee_id,
+                            department: record.employee.team?.name // Map team to department
+                        })}>
+                            <View style={styles.card}>
+                                <View style={styles.cardRow}>
+                                    <View>
+                                        <Text style={styles.name}>
+                                            {record.employee.first_name} {record.employee.last_name}
+                                        </Text>
+                                        <Text style={styles.jobTitle}>
+                                            {record.employee.job_title} • {record.employee.role.toUpperCase()}
+                                        </Text>
+                                    </View>
+                                    <View style={styles.timeBadge}>
+                                        <Text style={styles.timeText}>In: {formatTime(record.check_in_time)}</Text>
+                                    </View>
                                 </View>
                             </View>
-                        </View>
+                        </TouchableOpacity>
                     ))
                 )}
             </View>
@@ -203,18 +279,25 @@ export default function AttendanceReport() {
                 {absent.length === 0 ? (
                     <Text style={styles.emptyText}>Everyone is present!</Text>
                 ) : (
-                    absent.map(emp => (
-                        <View key={emp.id} style={[styles.card, styles.absentCard]}>
-                            <View>
-                                <Text style={styles.name}>
-                                    {emp.first_name} {emp.last_name}
-                                </Text>
-                                <Text style={styles.jobTitle}>{emp.job_title}</Text>
+                    filteredAbsent.map(emp => (
+                        <TouchableOpacity key={emp.id} onPress={() => handleEmployeePress({
+                            ...emp,
+                            department: emp.team?.name
+                        })}>
+                            <View style={[styles.card, styles.absentCard]}>
+                                <View style={styles.cardRow}>
+                                    <View>
+                                        <Text style={styles.name}>
+                                            {emp.first_name} {emp.last_name}
+                                        </Text>
+                                        <Text style={styles.jobTitle}>{emp.job_title}</Text>
+                                    </View>
+                                    <View style={styles.statusBadge}>
+                                        <Text style={styles.statusText}>Absent</Text>
+                                    </View>
+                                </View>
                             </View>
-                            <View style={styles.statusBadge}>
-                                <Text style={styles.statusText}>Not Yet Status</Text>
-                            </View>
-                        </View>
+                        </TouchableOpacity>
                     ))
                 )}
             </View>
@@ -245,6 +328,13 @@ export default function AttendanceReport() {
             )}
 
             <View style={{ height: 40 }} />
+
+            <EmployeeDetailModal
+                visible={showDetailModal}
+                onClose={() => setShowDetailModal(false)}
+                employee={selectedEmployee}
+                loadingStats={loadingStats}
+            />
         </ScrollView>
     );
 }
@@ -274,6 +364,13 @@ const styles = StyleSheet.create({
         fontSize: 16,
         color: '#666',
         marginTop: 4,
+        marginBottom: 12,
+    },
+    searchBar: {
+        backgroundColor: '#f5f5f5',
+        padding: 10,
+        borderRadius: 8,
+        fontSize: 16,
     },
     statsContainer: {
         flexDirection: 'row',

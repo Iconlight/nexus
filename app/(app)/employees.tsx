@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity } from 'react-native';
+import EditEmployeeModal from '../../src/components/EditEmployeeModal';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 
@@ -16,6 +17,8 @@ type Employee = {
     allowed_leave_days?: number;
     team_id?: string;
     team?: { name: string };
+    gender?: string;
+    base_salary?: number;
 };
 
 type Department = {
@@ -43,7 +46,12 @@ export default function Employees() {
     const [leaveDays, setLeaveDays] = useState('21');
     const [baseSalary, setBaseSalary] = useState('');
     const [selectedDepartment, setSelectedDepartment] = useState('');
+    const [gender, setGender] = useState('');
     const [inviting, setInviting] = useState(false);
+
+    // Edit state
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
 
     useEffect(() => {
         loadEmployees();
@@ -153,6 +161,7 @@ export default function Employees() {
                         allowedLeaveDays: parseInt(leaveDays),
                         baseSalary: parseFloat(baseSalary),
                         teamId: selectedDepartment || null,
+                        gender: gender || null,
                     }),
                 }
             );
@@ -180,6 +189,7 @@ export default function Employees() {
             setLeaveDays('21');
             setBaseSalary('');
             setSelectedDepartment('');
+            setGender('');
             setShowInviteForm(false);
 
             // Reload employees
@@ -191,6 +201,35 @@ export default function Employees() {
         } finally {
             setInviting(false);
         }
+    }
+
+    async function handleUpdateEmployee(updates: any) {
+        if (!editingEmployee) return;
+
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update(updates)
+                .eq('id', editingEmployee.id);
+
+            if (error) throw error;
+
+            const msg = 'Employee updated successfully';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
+
+            setShowEditModal(false);
+            setEditingEmployee(null);
+            loadEmployees();
+        } catch (error: any) {
+            console.error('Update error:', error);
+            const msg = error.message || 'Failed to update employee';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+        }
+    }
+
+    function openEditModal(emp: Employee) {
+        setEditingEmployee(emp);
+        setShowEditModal(true);
     }
 
     async function removeEmployee(employeeId: string, employeeName: string) {
@@ -350,6 +389,18 @@ export default function Employees() {
                         ))}
                     </View>
 
+                    <Text style={styles.label}>Gender (optional):</Text>
+                    <View style={styles.roleButtons}>
+                        {['male', 'female', 'other', 'prefer_not_to_say'].map((g) => (
+                            <Button
+                                key={g}
+                                title={g.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                onPress={() => setGender(g)}
+                                color={gender === g ? '#2196f3' : '#999'}
+                            />
+                        ))}
+                    </View>
+
                     <Text style={styles.label}>Department (optional):</Text>
                     <View style={styles.roleButtons}>
                         <Button
@@ -400,6 +451,11 @@ export default function Employees() {
                                 {emp.job_title && (
                                     <Text style={styles.jobTitle}>{emp.job_title}</Text>
                                 )}
+                                {emp.team && (
+                                    <View style={styles.deptBadge}>
+                                        <Text style={styles.deptText}>🏢 {emp.team.name}</Text>
+                                    </View>
+                                )}
                                 <Text style={styles.employeeEmail}>{emp.email}</Text>
                                 {(emp.working_days_per_week || emp.working_hours_per_day || emp.allowed_leave_days) && (
                                     <Text style={styles.employeeDetails}>
@@ -418,29 +474,8 @@ export default function Employees() {
                                 {emp.is_active && (
                                     <>
                                         <Button
-                                            title="Edit Role"
-                                            onPress={async () => {
-                                                // Simple role rotation for now
-                                                const roles = ['employee', 'manager', 'hr', 'finance', 'admin'];
-                                                const currentIndex = roles.indexOf(emp.role);
-                                                const nextRole = roles[(currentIndex + 1) % roles.length];
-
-                                                try {
-                                                    const { error } = await supabase
-                                                        .from('profiles')
-                                                        .update({ role: nextRole })
-                                                        .eq('id', emp.id);
-
-                                                    if (error) throw error;
-
-                                                    const msg = `Role updated to ${nextRole}`;
-                                                    Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
-                                                    loadEmployees();
-                                                } catch (error: any) {
-                                                    const msg = error.message || 'Failed to update role';
-                                                    Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
-                                                }
-                                            }}
+                                            title="Edit"
+                                            onPress={() => openEditModal(emp)}
                                         />
                                         <Button
                                             title="Remove"
@@ -453,7 +488,18 @@ export default function Employees() {
                         </View>
                     ))}
             </View>
-        </ScrollView>
+
+
+            {/* Edit Modal */}
+            {/* Edit Modal Component */}
+            <EditEmployeeModal
+                visible={showEditModal}
+                onClose={() => setShowEditModal(false)}
+                employee={editingEmployee}
+                departments={departments}
+                onUpdate={handleUpdateEmployee}
+            />
+        </ScrollView >
     );
 }
 
@@ -598,6 +644,21 @@ const styles = StyleSheet.create({
     inactiveCard: {
         opacity: 0.6,
         backgroundColor: '#f5f5f5',
+    },
+
+
+    deptBadge: {
+        backgroundColor: '#f3e5f5',
+        paddingHorizontal: 8,
+        paddingVertical: 2,
+        borderRadius: 4,
+        alignSelf: 'flex-start',
+        marginBottom: 4,
+    },
+    deptText: {
+        fontSize: 12,
+        color: '#7b1fa2',
+        fontWeight: '500',
     },
     inactiveLabel: {
         color: '#d32f2f',

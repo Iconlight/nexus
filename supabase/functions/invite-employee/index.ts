@@ -71,7 +71,9 @@ serve(async (req) => {
             workingDays = 5,
             workingHours = 8,
             allowedLeaveDays = 21,
-            baseSalary
+            baseSalary,
+            teamId,
+            gender
         } = await req.json()
 
         // Validate input
@@ -116,7 +118,9 @@ serve(async (req) => {
                 working_hours_per_day: workingHours,
                 allowed_leave_days: allowedLeaveDays,
                 is_active: true,
-                team_id: teamId || null
+                team_id: teamId || null,
+                gender: gender || null,
+                base_salary: baseSalary || null
             })
 
         if (profileInsertError) {
