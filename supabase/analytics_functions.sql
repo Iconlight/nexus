@@ -17,6 +17,8 @@ DECLARE
   v_absent_days INT;
   v_attendance_rate NUMERIC;
   v_base_salary NUMERIC;
+  v_month_start DATE;
+  v_month_end DATE;
 BEGIN
   -- Get employee details
   SELECT 
@@ -33,46 +35,42 @@ BEGIN
   -- Default working days if null
   v_working_days_per_week := COALESCE(v_working_days_per_week, 5);
 
-  -- Calculate days in month
-  -- Logic: Get date for 1st of Next Month, subtract 1 day, get day number
-  v_total_days_in_month := DATE_PART('days', (make_date(p_year, p_month, 1) + interval '1 month' - interval '1 day'));
+  -- Calculate month start and end
+  v_month_start := make_date(p_year, p_month, 1);
+  v_month_end := (v_month_start + interval '1 month' - interval '1 day')::DATE;
+  v_total_days_in_month := DATE_PART('days', v_month_end);
 
   -- Calculate expected working days
   -- Formula: (Total Days / 7) * Working Days Per Week
-  -- This provides a consistent statistical expectation based on their contract
   v_expected_working_days := ROUND((v_total_days_in_month::NUMERIC / 7.0) * v_working_days_per_week::NUMERIC);
 
   -- Count Days Present (Unique check-in dates)
   SELECT COUNT(DISTINCT check_in_time::DATE) INTO v_present_days
   FROM attendance_logs
   WHERE employee_id = p_employee_id
-  AND EXTRACT(MONTH FROM check_in_time) = p_month
-  AND EXTRACT(YEAR FROM check_in_time) = p_year;
+  AND check_in_time::DATE >= v_month_start
+  AND check_in_time::DATE <= v_month_end;
 
-  -- Count Leaves Used (Approved status)
-  SELECT COALESCE(SUM(duration), 0) INTO v_leave_days
+  -- Count Leaves Used (Approved status, calculate overlap days)
+  -- Logic: Intersect [start_date, end_date] with [month_start, month_end]
+  SELECT COALESCE(SUM(
+    GREATEST(0, (LEAST(end_date, v_month_end) - GREATEST(start_date, v_month_start) + 1))
+  ), 0) INTO v_leave_days
   FROM leave_requests
   WHERE employee_id = p_employee_id
   AND status = 'approved'
-  AND EXTRACT(MONTH FROM start_date) = p_month
-  AND EXTRACT(YEAR FROM start_date) = p_year;
+  AND start_date <= v_month_end
+  AND end_date >= v_month_start;
 
   -- Calculate Absent
-  -- Absent = Expected - Present - Leave
-  -- Floor at 0 to avoid negative numbers if they worked extra days
   v_absent_days := GREATEST(0, v_expected_working_days - v_present_days - v_leave_days);
 
   -- Calculate Attendance Rate
-  -- (Present / (Expected - Leave)) * 100
-  -- If they took leave, it shouldn't count against their rate.
-  -- So denominator is (Expected - Leave). If that's 0 (e.g. whole month leave), rate is 100%.
-  
   IF (v_expected_working_days - v_leave_days) > 0 THEN
     v_attendance_rate := ROUND((v_present_days::NUMERIC / (v_expected_working_days - v_leave_days)::NUMERIC) * 100, 1);
-    -- Cap at 100%
     IF v_attendance_rate > 100 THEN v_attendance_rate := 100; END IF;
   ELSE
-    v_attendance_rate := 100; -- No working days expected
+    v_attendance_rate := 100;
   END IF;
 
   RETURN json_build_object(
