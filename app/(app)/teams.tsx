@@ -75,7 +75,7 @@ export default function Teams() {
 
     async function createTeam() {
         if (!teamName) {
-            const msg = 'Please enter a team name';
+            const msg = 'Please enter a department name';
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
             return;
         }
@@ -103,7 +103,7 @@ export default function Teams() {
 
             if (error) throw error;
 
-            const msg = 'Team created successfully!';
+            const msg = 'Department created successfully!';
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
 
             setTeamName('');
@@ -120,7 +120,7 @@ export default function Teams() {
     }
 
     async function deleteTeam(teamId: string) {
-        const confirmMsg = 'Are you sure you want to delete this team?';
+        const confirmMsg = 'Are you sure you want to delete this department?';
         const confirmed = Platform.OS === 'web'
             ? window.confirm(confirmMsg)
             : await new Promise((resolve) => {
@@ -144,7 +144,7 @@ export default function Teams() {
 
             if (error) throw error;
 
-            const msg = 'Team deleted successfully';
+            const msg = 'Department deleted successfully';
             Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
 
             loadData();
@@ -157,7 +157,7 @@ export default function Teams() {
     if (loading) {
         return (
             <View style={styles.container}>
-                <Text>Loading teams...</Text>
+                <Text>Loading departments...</Text>
             </View>
         );
     }
@@ -165,20 +165,20 @@ export default function Teams() {
     return (
         <ScrollView style={styles.container}>
             <View style={styles.header}>
-                <Text style={styles.title}>Team Management</Text>
+                <Text style={styles.title}>Department Management</Text>
                 <Button
-                    title={showCreateForm ? "Cancel" : "Create Team"}
+                    title={showCreateForm ? "Cancel" : "Create Department"}
                     onPress={() => setShowCreateForm(!showCreateForm)}
                 />
             </View>
 
             {showCreateForm && (
                 <View style={styles.createForm}>
-                    <Text style={styles.formTitle}>Create New Team</Text>
+                    <Text style={styles.formTitle}>Create New Department</Text>
 
                     <TextInput
                         style={styles.input}
-                        placeholder="Team Name *"
+                        placeholder="Department Name *"
                         value={teamName}
                         onChangeText={setTeamName}
                     />
@@ -193,7 +193,7 @@ export default function Teams() {
                     />
 
                     <Button
-                        title={creating ? "Creating..." : "Create Team"}
+                        title={creating ? "Creating..." : "Create Department"}
                         onPress={createTeam}
                         disabled={creating}
                     />
@@ -201,11 +201,11 @@ export default function Teams() {
             )}
 
             <View style={styles.teamsList}>
-                <Text style={styles.sectionTitle}>Teams ({teams.length})</Text>
+                <Text style={styles.sectionTitle}>Departments ({teams.length})</Text>
 
                 {teams.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No teams created yet</Text>
+                        <Text style={styles.emptyText}>No departments created yet</Text>
                     </View>
                 ) : (
                     teams.map((team) => (

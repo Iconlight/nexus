@@ -14,6 +14,13 @@ type Employee = {
     working_days_per_week?: number;
     working_hours_per_day?: number;
     allowed_leave_days?: number;
+    team_id?: string;
+    team?: { name: string };
+};
+
+type Department = {
+    id: string;
+    name: string;
 };
 
 export default function Employees() {
@@ -22,6 +29,7 @@ export default function Employees() {
     const [loading, setLoading] = useState(true);
     const [showInviteForm, setShowInviteForm] = useState(false);
     const [showInactive, setShowInactive] = useState(false);
+    const [departments, setDepartments] = useState<Department[]>([]);
 
     // Invite form state
     const [firstName, setFirstName] = useState('');
@@ -34,10 +42,12 @@ export default function Employees() {
     const [workingHours, setWorkingHours] = useState('8');
     const [leaveDays, setLeaveDays] = useState('21');
     const [baseSalary, setBaseSalary] = useState('');
+    const [selectedDepartment, setSelectedDepartment] = useState('');
     const [inviting, setInviting] = useState(false);
 
     useEffect(() => {
         loadEmployees();
+        loadDepartments();
     }, []);
 
     async function loadEmployees() {
@@ -54,7 +64,10 @@ export default function Employees() {
             // Load all employees in the company
             const { data, error } = await supabase
                 .from('profiles')
-                .select('*')
+                .select(`
+                    *,
+                    team:teams(name)
+                `)
                 .eq('company_id', profile.company_id)
                 .order('created_at', { ascending: false });
 
@@ -64,6 +77,29 @@ export default function Employees() {
             console.error('Error loading employees:', error);
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function loadDepartments() {
+        try {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('company_id')
+                .eq('id', user?.id)
+                .single();
+
+            if (!profile?.company_id) return;
+
+            const { data, error } = await supabase
+                .from('teams')
+                .select('id, name')
+                .eq('company_id', profile.company_id)
+                .order('name');
+
+            if (error) throw error;
+            setDepartments(data || []);
+        } catch (error) {
+            console.error('Error loading departments:', error);
         }
     }
 
@@ -116,6 +152,7 @@ export default function Employees() {
                         workingHours: parseFloat(workingHours),
                         allowedLeaveDays: parseInt(leaveDays),
                         baseSalary: parseFloat(baseSalary),
+                        teamId: selectedDepartment || null,
                     }),
                 }
             );
@@ -142,6 +179,7 @@ export default function Employees() {
             setWorkingHours('8');
             setLeaveDays('21');
             setBaseSalary('');
+            setSelectedDepartment('');
             setShowInviteForm(false);
 
             // Reload employees
@@ -308,6 +346,23 @@ export default function Employees() {
                                 title={r.charAt(0).toUpperCase() + r.slice(1)}
                                 onPress={() => setRole(r)}
                                 color={role === r ? '#2196f3' : '#999'}
+                            />
+                        ))}
+                    </View>
+
+                    <Text style={styles.label}>Department (optional):</Text>
+                    <View style={styles.roleButtons}>
+                        <Button
+                            title="None"
+                            onPress={() => setSelectedDepartment('')}
+                            color={selectedDepartment === '' ? '#2196f3' : '#999'}
+                        />
+                        {departments.map((dept) => (
+                            <Button
+                                key={dept.id}
+                                title={dept.name}
+                                onPress={() => setSelectedDepartment(dept.id)}
+                                color={selectedDepartment === dept.id ? '#2196f3' : '#999'}
                             />
                         ))}
                     </View>

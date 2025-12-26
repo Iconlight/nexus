@@ -179,6 +179,15 @@ export default function Dashboard() {
                     <Button title="Request Leave" onPress={() => router.push('/(app)/leave')} />
                 </View>
 
+                {/* Admin/HR Attendance Overview */}
+                {(isAdmin || isHR) && (
+                    <View style={styles.actionCard}>
+                        <Text style={styles.actionTitle}>📊 Attendance Overview</Text>
+                        <Text style={styles.actionDescription}>View who is present/absent today</Text>
+                        <Button title="View Report" onPress={() => router.push('/(app)/attendance-report')} />
+                    </View>
+                )}
+
                 <View style={styles.actionCard}>
                     <Text style={styles.actionTitle}>💰 View Payslips</Text>
                     <Text style={styles.actionDescription}>Download your payslips</Text>
@@ -198,11 +207,19 @@ export default function Dashboard() {
                             </View>
                         )}
 
+                        {isAdmin && (
+                            <View style={styles.actionCard}>
+                                <Text style={styles.actionTitle}>⚙️ Company Settings</Text>
+                                <Text style={styles.actionDescription}>Set office location and radius</Text>
+                                <Button title="Settings" onPress={() => router.push('/(app)/settings')} />
+                            </View>
+                        )}
+
                         {(isAdmin || isManager) && (
                             <View style={styles.actionCard}>
-                                <Text style={styles.actionTitle}>🏢 Manage Teams</Text>
-                                <Text style={styles.actionDescription}>Create and organize teams</Text>
-                                <Button title="Manage Teams" onPress={() => router.push('/(app)/teams')} />
+                                <Text style={styles.actionTitle}>🏢 Manage Departments</Text>
+                                <Text style={styles.actionDescription}>Create and organize departments</Text>
+                                <Button title="Manage Departments" onPress={() => router.push('/(app)/teams')} />
                             </View>
                         )}
 

@@ -115,7 +115,8 @@ serve(async (req) => {
                 working_days_per_week: workingDays,
                 working_hours_per_day: workingHours,
                 allowed_leave_days: allowedLeaveDays,
-                is_active: true
+                is_active: true,
+                team_id: teamId || null
             })
 
         if (profileInsertError) {

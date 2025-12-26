@@ -10,11 +10,21 @@ export default function CheckIn() {
   const [loading, setLoading] = useState(false);
   const [todayAttendance, setTodayAttendance] = useState<any>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [distanceToOffice, setDistanceToOffice] = useState<number | null>(null);
+  const [officeRadius, setOfficeRadius] = useState<number>(100);
+  const [withinRange, setWithinRange] = useState<boolean>(true);
 
   useEffect(() => {
     loadTodayAttendance();
     requestLocationPermission();
+    loadOfficeSettings();
   }, []);
+
+  useEffect(() => {
+    if (location) {
+      checkDistanceToOffice();
+    }
+  }, [location]);
 
   async function requestLocationPermission() {
     try {
@@ -53,10 +63,76 @@ export default function CheckIn() {
     }
   }
 
+  async function loadOfficeSettings() {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (!profile?.company_id) return;
+
+      const { data: company } = await supabase
+        .from('companies')
+        .select('office_radius_meters')
+        .eq('id', profile.company_id)
+        .single();
+
+      if (company?.office_radius_meters) {
+        setOfficeRadius(company.office_radius_meters);
+      }
+    } catch (error) {
+      console.error('Error loading office settings:', error);
+    }
+  }
+
+  async function checkDistanceToOffice() {
+    if (!location) return;
+
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('company_id')
+        .eq('id', user?.id)
+        .single();
+
+      if (!profile?.company_id) return;
+
+      const { data, error } = await supabase.rpc('calculate_distance_to_office', {
+        p_company_id: profile.company_id,
+        p_employee_lat: location.coords.latitude,
+        p_employee_lon: location.coords.longitude
+      });
+
+      if (error) {
+        console.error('Error calculating distance:', error);
+        return;
+      }
+
+      if (data !== null) {
+        setDistanceToOffice(data);
+        setWithinRange(data <= officeRadius);
+      } else {
+        // No office location set, allow check-in
+        setWithinRange(true);
+      }
+    } catch (error) {
+      console.error('Error checking distance:', error);
+    }
+  }
+
   async function handleCheckIn() {
     if (!location) {
       const msg = 'Location not available. Please enable location services.';
       Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+      return;
+    }
+
+    if (!withinRange) {
+      const distance = distanceToOffice ? Math.round(distanceToOffice) : 0;
+      const msg = `You are ${distance}m from the office. You must be within ${officeRadius}m to check in.`;
+      Platform.OS === 'web' ? alert(msg) : Alert.alert('Out of Range', msg);
       return;
     }
 
@@ -159,6 +235,18 @@ export default function CheckIn() {
         )}
       </View>
 
+      {distanceToOffice !== null && (
+        <View style={[styles.card, withinRange ? styles.successCard : styles.warningCard]}>
+          <Text style={styles.cardTitle}>🏢 Office Distance</Text>
+          <Text style={styles.distanceText}>
+            {Math.round(distanceToOffice)}m from office
+          </Text>
+          <Text style={styles.rangeText}>
+            {withinRange ? '✓ Within check-in range' : `✗ Must be within ${officeRadius}m`}
+          </Text>
+        </View>
+      )}
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Today's Attendance</Text>
         {todayAttendance ? (
@@ -183,7 +271,7 @@ export default function CheckIn() {
           <Button
             title={loading ? "Checking in..." : "Check In"}
             onPress={handleCheckIn}
-            disabled={loading || !location}
+            disabled={loading || !location || !withinRange}
           />
         )}
 
@@ -269,5 +357,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#4caf50',
     textAlign: 'center',
+  },
+  successCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#4caf50',
+  },
+  warningCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#ff9800',
+    backgroundColor: '#fff3e0',
+  },
+  distanceText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+  },
+  rangeText: {
+    fontSize: 14,
+    color: '#666',
   },
 });
