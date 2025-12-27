@@ -22,6 +22,7 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
 
     // Modal
     const [modalVisible, setModalVisible] = useState(false);
+    const [currentReport, setCurrentReport] = useState<Report | null>(null);
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [creating, setCreating] = useState(false);
@@ -33,6 +34,8 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
     }, [teamId]);
 
     async function loadReports() {
+        if (!teamId) return;
+        setLoading(true);
         try {
             const { data, error } = await supabase
                 .from('department_reports')
@@ -42,12 +45,25 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
 
             if (error) throw error;
             setReports(data || []);
-
-        } catch (error) {
-            console.error('Error loading reports:', error);
+        } catch (error: any) {
+            console.error('Error loading reports:', error.message);
         } finally {
             setLoading(false);
         }
+    }
+
+    function openNewReport() {
+        setCurrentReport(null);
+        setTitle('');
+        setContent('');
+        setModalVisible(true);
+    }
+
+    function openReport(report: Report) {
+        setCurrentReport(report);
+        setTitle(report.title);
+        setContent(report.content);
+        setModalVisible(true);
     }
 
     async function saveReport(status: 'draft' | 'submitted') {
@@ -55,31 +71,33 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
 
         setCreating(true);
         try {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('company_id')
-                .eq('id', user?.id)
-                .single();
+            const userProfile = await supabase.from('profiles').select('company_id').eq('id', user?.id).single();
+            const companyId = userProfile.data?.company_id;
 
-            if (!profile?.company_id) throw new Error('Company not found');
-
-            const { error } = await supabase
-                .from('department_reports')
-                .insert({
-                    company_id: profile.company_id,
-                    team_id: teamId,
-                    author_id: user?.id,
-                    title,
-                    content,
-                    status
-                });
-
-            if (error) throw error;
+            if (currentReport) {
+                // Update existing
+                const { error } = await supabase
+                    .from('department_reports')
+                    .update({ title, content, status })
+                    .eq('id', currentReport.id);
+                if (error) throw error;
+            } else {
+                // Create new
+                const { error } = await supabase
+                    .from('department_reports')
+                    .insert({
+                        company_id: companyId,
+                        team_id: teamId,
+                        author_id: user?.id,
+                        title,
+                        content,
+                        status
+                    });
+                if (error) throw error;
+            }
 
             Alert.alert('Success', `Report ${status === 'draft' ? 'saved as draft' : 'submitted'}`);
             setModalVisible(false);
-            setTitle('');
-            setContent('');
             loadReports();
         } catch (error: any) {
             Alert.alert('Error', error.message);
@@ -92,11 +110,13 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
         return status === 'submitted' ? '#4caf50' : '#ff9800';
     }
 
+    const isReadOnly = currentReport?.status === 'submitted';
+
     return (
         <View style={styles.container}>
             <View style={styles.header}>
                 <Text style={styles.title}>Department Reports</Text>
-                <Button title="New Report" onPress={() => setModalVisible(true)} />
+                <Button title="New Report" onPress={openNewReport} />
             </View>
 
             <ScrollView style={styles.list}>
@@ -104,16 +124,18 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
                     <Text style={styles.emptyText}>No reports found.</Text>
                 ) : (
                     reports.map(report => (
-                        <View key={report.id} style={styles.card}>
-                            <View style={styles.cardHeader}>
-                                <Text style={styles.cardTitle}>{report.title}</Text>
-                                <View style={[styles.badge, { backgroundColor: getStatusColor(report.status) }]}>
-                                    <Text style={styles.badgeText}>{report.status.toUpperCase()}</Text>
+                        <TouchableOpacity key={report.id} onPress={() => openReport(report)}>
+                            <View style={styles.card}>
+                                <View style={styles.cardHeader}>
+                                    <Text style={styles.cardTitle}>{report.title}</Text>
+                                    <View style={[styles.badge, { backgroundColor: getStatusColor(report.status) }]}>
+                                        <Text style={styles.badgeText}>{report.status.toUpperCase()}</Text>
+                                    </View>
                                 </View>
+                                <Text style={styles.date}>{new Date(report.created_at).toLocaleDateString()}</Text>
+                                <Text style={styles.preview} numberOfLines={2}>{report.content}</Text>
                             </View>
-                            <Text style={styles.date}>{new Date(report.created_at).toLocaleDateString()}</Text>
-                            <Text style={styles.preview} numberOfLines={2}>{report.content}</Text>
-                        </View>
+                        </TouchableOpacity>
                     ))
                 )}
             </ScrollView>
@@ -126,8 +148,10 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
             >
                 <View style={styles.modalContainer}>
                     <View style={styles.modalHeader}>
-                        <Text style={styles.modalTitle}>New Report</Text>
-                        <Button title="Cancel" onPress={() => setModalVisible(false)} />
+                        <Text style={styles.modalTitle}>
+                            {currentReport ? (isReadOnly ? 'View Report' : 'Edit Report') : 'New Report'}
+                        </Text>
+                        <Button title="Close" onPress={() => setModalVisible(false)} />
                     </View>
 
                     <TextInput
@@ -135,6 +159,7 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
                         placeholder="Report Title"
                         value={title}
                         onChangeText={setTitle}
+                        editable={!isReadOnly}
                     />
 
                     <TextInput
@@ -143,22 +168,25 @@ export default function DepartmentReports({ teamId }: DepartmentReportsProps) {
                         value={content}
                         onChangeText={setContent}
                         multiline
+                        editable={!isReadOnly}
                     />
 
-                    <View style={styles.buttonRow}>
-                        <Button
-                            title={creating ? "Saving..." : "Save Draft"}
-                            onPress={() => saveReport('draft')}
-                            disabled={creating}
-                            color="#ff9800"
-                        />
-                        <View style={{ width: 16 }} />
-                        <Button
-                            title={creating ? "Submitting..." : "Submit Report"}
-                            onPress={() => saveReport('submitted')}
-                            disabled={creating}
-                        />
-                    </View>
+                    {!isReadOnly && (
+                        <View style={styles.buttonRow}>
+                            <Button
+                                title={creating ? "Saving..." : "Save Draft"}
+                                onPress={() => saveReport('draft')}
+                                disabled={creating}
+                                color="#ff9800"
+                            />
+                            <View style={{ width: 16 }} />
+                            <Button
+                                title={creating ? "Submitting..." : "Submit Report"}
+                                onPress={() => saveReport('submitted')}
+                                disabled={creating}
+                            />
+                        </View>
+                    )}
                 </View>
             </Modal>
         </View>

@@ -43,13 +43,28 @@ export default function Teams() {
         try {
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('company_id')
+                .select('company_id, role')
                 .eq('id', user?.id)
                 .single();
 
             if (!profile?.company_id) return;
 
-            // Load teams
+            // Redirect if Manager
+            if (profile.role === 'manager') {
+                // Get managed team
+                const { data: managerData } = await supabase
+                    .from('team_managers')
+                    .select('team_id')
+                    .eq('manager_id', user?.id)
+                    .single();
+
+                if (managerData) {
+                    router.replace(`/(app)/teams/${managerData.team_id}`);
+                    return;
+                }
+            }
+
+            // Load teams (Admin/CEO/HR only)
             const { data: teamsData, error: teamsError } = await supabase
                 .from('teams')
                 .select('*')
