@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import ManageLeadersModal from '../../src/components/ManageLeadersModal';
@@ -23,6 +24,7 @@ type Employee = {
 
 export default function Teams() {
     const { user } = useAuth();
+    const router = useRouter(); // Initialize router
     const [teams, setTeams] = useState<Team[]>([]);
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
@@ -32,10 +34,6 @@ export default function Teams() {
     const [teamName, setTeamName] = useState('');
     const [teamDescription, setTeamDescription] = useState('');
     const [creating, setCreating] = useState(false);
-
-    // Modal State
-    const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-    const [showLeadersModal, setShowLeadersModal] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -230,11 +228,8 @@ export default function Teams() {
 
                             <View style={styles.teamActions}>
                                 <Button
-                                    title="Manage Leaders"
-                                    onPress={() => {
-                                        setSelectedTeam(team);
-                                        setShowLeadersModal(true);
-                                    }}
+                                    title="Manage Department"
+                                    onPress={() => router.push(`/(app)/teams/${team.id}`)}
                                     color="#2196f3"
                                 />
                                 <Button
@@ -248,19 +243,7 @@ export default function Teams() {
                 )}
             </View>
 
-            {selectedTeam && (
-                <ManageLeadersModal
-                    visible={showLeadersModal}
-                    onClose={() => {
-                        setShowLeadersModal(false);
-                        setSelectedTeam(null);
-                    }}
-                    teamId={selectedTeam.id}
-                    teamName={selectedTeam.name}
-                    eligibleManagers={employees}
-                    onUpdate={loadData}
-                />
-            )}
+
         </ScrollView>
     );
 }

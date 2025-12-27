@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Button, FlatList, Alert } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Button, FlatList, Alert, Platform } from 'react-native';
 import { supabase } from '../services/supabase';
 
 type Leader = {
@@ -57,21 +57,24 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
         if (candidate?.role === 'employee') {
             // Web compatible confirm
             const confirmMsg = `Promote ${candidate.first_name} to Manager? They must be a manager to lead a department.`;
-            // For React Native Web compatibility, use window.confirm or a custom modal. 
-            // Since we use Alert.alert which isn't blocking on web in the same way, we wrap it.
 
-            // Simple cross-platform approach:
-            Alert.alert(
-                'Promote Employee',
-                confirmMsg,
-                [
-                    { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Promote & Assign',
-                        onPress: () => performAddLeader(managerId, true)
-                    }
-                ]
-            );
+            if (Platform.OS === 'web') {
+                if (window.confirm(confirmMsg)) {
+                    performAddLeader(managerId, true);
+                }
+            } else {
+                Alert.alert(
+                    'Promote Employee',
+                    confirmMsg,
+                    [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                            text: 'Promote & Assign',
+                            onPress: () => performAddLeader(managerId, true)
+                        }
+                    ]
+                );
+            }
             return;
         }
 
