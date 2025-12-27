@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
-import ManageLeadersModal from '../../src/components/ManageLeadersModal';
 
 type Team = {
     id: string;
@@ -33,10 +32,6 @@ export default function Teams() {
     const [teamDescription, setTeamDescription] = useState('');
     const [creating, setCreating] = useState(false);
 
-    // Modal State
-    const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
-    const [showLeadersModal, setShowLeadersModal] = useState(false);
-
     useEffect(() => {
         loadData();
     }, []);
@@ -66,10 +61,9 @@ export default function Teams() {
                 .from('profiles')
                 .select('id, first_name, last_name, email, role')
                 .eq('company_id', profile.company_id)
-                .in('role', ['employee', 'manager']);
+                .in('role', ['manager', 'admin']);
 
             if (employeesError) throw employeesError;
-            console.log('Fetched eligible employees:', employeesData?.length, employeesData?.map(e => `${e.first_name} (${e.role})`));
             setEmployees(employeesData || []);
 
         } catch (error) {
@@ -230,14 +224,6 @@ export default function Teams() {
 
                             <View style={styles.teamActions}>
                                 <Button
-                                    title="Manage Leaders"
-                                    onPress={() => {
-                                        setSelectedTeam(team);
-                                        setShowLeadersModal(true);
-                                    }}
-                                    color="#2196f3"
-                                />
-                                <Button
                                     title="Delete"
                                     onPress={() => deleteTeam(team.id)}
                                     color="#f44336"
@@ -247,20 +233,6 @@ export default function Teams() {
                     ))
                 )}
             </View>
-
-            {selectedTeam && (
-                <ManageLeadersModal
-                    visible={showLeadersModal}
-                    onClose={() => {
-                        setShowLeadersModal(false);
-                        setSelectedTeam(null);
-                    }}
-                    teamId={selectedTeam.id}
-                    teamName={selectedTeam.name}
-                    eligibleManagers={employees}
-                    onUpdate={loadData}
-                />
-            )}
         </ScrollView>
     );
 }

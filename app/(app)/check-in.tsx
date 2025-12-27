@@ -51,9 +51,10 @@ export default function CheckIn() {
         .select('*')
         .eq('employee_id', user?.id)
         .eq('date', today)
-        .single();
+        .eq('date', today)
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error) {
         throw error;
       }
 

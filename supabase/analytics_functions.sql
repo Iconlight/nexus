@@ -19,16 +19,21 @@ DECLARE
   v_base_salary NUMERIC;
   v_month_start DATE;
   v_month_end DATE;
+  v_start_date DATE;
+  v_effective_start DATE;
+  v_effective_days INT;
 BEGIN
   -- Get employee details
   SELECT 
     working_days_per_week, 
     base_salary,
-    allowed_leave_days
+    allowed_leave_days,
+    created_at::DATE
   INTO 
     v_working_days_per_week, 
     v_base_salary,
-    v_allowed_leave_days
+    v_allowed_leave_days,
+    v_start_date
   FROM profiles 
   WHERE id = p_employee_id;
 
@@ -38,11 +43,18 @@ BEGIN
   -- Calculate month start and end
   v_month_start := make_date(p_year, p_month, 1);
   v_month_end := (v_month_start + interval '1 month' - interval '1 day')::DATE;
-  v_total_days_in_month := DATE_PART('days', v_month_end);
+
+  -- Determine effective start date (max of month start or employee start)
+  v_effective_start := GREATEST(v_month_start, v_start_date);
 
   -- Calculate expected working days
-  -- Formula: (Total Days / 7) * Working Days Per Week
-  v_expected_working_days := ROUND((v_total_days_in_month::NUMERIC / 7.0) * v_working_days_per_week::NUMERIC);
+  IF v_effective_start > v_month_end THEN
+    v_expected_working_days := 0;
+  ELSE
+    v_effective_days := (v_month_end - v_effective_start + 1);
+    -- Formula: (Effective Days / 7) * Working Days Per Week
+    v_expected_working_days := ROUND((v_effective_days::NUMERIC / 7.0) * v_working_days_per_week::NUMERIC);
+  END IF;
 
   -- Count Days Present (Unique check-in dates)
   SELECT COUNT(DISTINCT check_in_time::DATE) INTO v_present_days
