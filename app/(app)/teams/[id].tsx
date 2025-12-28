@@ -8,6 +8,7 @@ import DepartmentReports from '../../../src/components/DepartmentReports';
 import ManageLeadersModal from '../../../src/components/ManageLeadersModal';
 import EmployeeDetailModal from '../../../src/components/EmployeeDetailModal';
 import AddMemberModal from '../../../src/components/AddMemberModal';
+import LeaveRequestModal from '../../../src/components/LeaveRequestModal';
 import { Alert, Platform } from 'react-native';
 
 export default function DepartmentDetail() {
@@ -27,6 +28,7 @@ export default function DepartmentDetail() {
 
     // Employee Details
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
+    const [selectedLeaveRequest, setSelectedLeaveRequest] = useState<any>(null);
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
@@ -93,7 +95,8 @@ export default function DepartmentDetail() {
             const { data: requests } = await supabase
                 .from('leave_requests')
                 .select(`
-                    id, start_date, end_date, type, status, reason,
+                    id, start_date, end_date, type, status, reason, 
+                    attachment_url, reviewer_note,
                     profiles:employee_id (first_name, last_name)
                 `)
                 .eq('status', 'pending')
@@ -251,17 +254,21 @@ export default function DepartmentDetail() {
                         {leaveRequests.length === 0 ? (
                             <Text style={{ fontStyle: 'italic', color: '#999' }}>No pending leave requests.</Text>
                         ) : (
+
                             leaveRequests.map(req => (
-                                <View key={req.id} style={styles.requestCard}>
-                                    <View>
-                                        <Text style={styles.reqName}>{req.profiles.first_name} {req.profiles.last_name}</Text>
-                                        <Text style={styles.reqType}>{req.type} • {req.start_date} to {req.end_date}</Text>
-                                        <Text style={styles.reqReason} numberOfLines={1}>{req.reason}</Text>
+                                <TouchableOpacity key={req.id} onPress={() => setSelectedLeaveRequest(req)}>
+                                    <View style={styles.requestCard}>
+                                        <View>
+                                            <Text style={styles.reqName}>{req.profiles.first_name} {req.profiles.last_name}</Text>
+                                            <Text style={styles.reqType}>{req.type} • {req.start_date} to {req.end_date}</Text>
+                                            <Text style={styles.reqReason} numberOfLines={1}>{req.reason}</Text>
+                                            {req.attachment_url && <Text style={{ fontSize: 10, color: '#2196f3', marginTop: 2 }}>📎 Has Attachment</Text>}
+                                        </View>
+                                        <View style={styles.reqBadge}>
+                                            <Text style={styles.reqBadgeText}>PENDING</Text>
+                                        </View>
                                     </View>
-                                    <View style={styles.reqBadge}>
-                                        <Text style={styles.reqBadgeText}>PENDING</Text>
-                                    </View>
-                                </View>
+                                </TouchableOpacity>
                             ))
                         )}
                     </ScrollView>
@@ -287,6 +294,13 @@ export default function DepartmentDetail() {
                 visible={showAddMemberModal}
                 onClose={() => setShowAddMemberModal(false)}
                 teamId={teamId}
+                onUpdate={loadTeamData}
+            />
+
+            <LeaveRequestModal
+                visible={!!selectedLeaveRequest}
+                request={selectedLeaveRequest}
+                onClose={() => setSelectedLeaveRequest(null)}
                 onUpdate={loadTeamData}
             />
         </View >
