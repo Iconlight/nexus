@@ -254,15 +254,21 @@ export default function DepartmentDetail() {
                         {leaveRequests.length === 0 ? (
                             <Text style={{ fontStyle: 'italic', color: '#999' }}>No pending leave requests.</Text>
                         ) : (
-
                             leaveRequests.map(req => (
-                                <TouchableOpacity key={req.id} onPress={() => setSelectedLeaveRequest(req)}>
+                                <TouchableOpacity
+                                    key={req.id}
+                                    onPress={() => setSelectedLeaveRequest(req)}
+                                    activeOpacity={0.7}
+                                >
                                     <View style={styles.requestCard}>
-                                        <View>
+                                        <View style={{ flex: 1 }}>
                                             <Text style={styles.reqName}>{req.profiles.first_name} {req.profiles.last_name}</Text>
                                             <Text style={styles.reqType}>{req.type} • {req.start_date} to {req.end_date}</Text>
-                                            <Text style={styles.reqReason} numberOfLines={1}>{req.reason}</Text>
-                                            {req.attachment_url && <Text style={{ fontSize: 10, color: '#2196f3', marginTop: 2 }}>📎 Has Attachment</Text>}
+                                            <Text style={styles.reqReason} numberOfLines={2}>{req.reason}</Text>
+                                            <View style={{ flexDirection: 'row', marginTop: 4, alignItems: 'center' }}>
+                                                <Text style={{ fontSize: 12, color: '#2196f3', fontWeight: '500' }}>Tap to view details</Text>
+                                                {req.attachment_url && <Text style={{ fontSize: 12, color: '#666', marginLeft: 8 }}>📎 attached</Text>}
+                                            </View>
                                         </View>
                                         <View style={styles.reqBadge}>
                                             <Text style={styles.reqBadgeText}>PENDING</Text>

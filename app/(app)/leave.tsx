@@ -19,7 +19,7 @@ export default function Leave() {
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  
+
   const [leaveType, setLeaveType] = useState('sick');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
@@ -82,9 +82,36 @@ export default function Leave() {
         throw new Error('Company not found');
       }
 
-      let documentUrl = null;
+      let attachmentUrl = null;
+
       if (document) {
-        documentUrl = 'pending_upload';
+        const file = document;
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${user?.id}/${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        // 1. Prepare Blob/File
+        let fileBody;
+        if (Platform.OS === 'web') {
+          fileBody = file.file; // Expo Document Picker on web returns the File object
+        } else {
+          const response = await fetch(file.uri);
+          fileBody = await response.blob();
+        }
+
+        // 2. Upload to Supabase
+        const { error: uploadError } = await supabase.storage
+          .from('leave-documents')
+          .upload(filePath, fileBody);
+
+        if (uploadError) throw uploadError;
+
+        // 3. Get Public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('leave-documents')
+          .getPublicUrl(filePath);
+
+        attachmentUrl = publicUrl;
       }
 
       const { error } = await supabase
@@ -96,7 +123,12 @@ export default function Leave() {
           start_date: startDate,
           end_date: endDate,
           reason,
-          document_url: documentUrl,
+          // Note: Schema column is 'attachment_url' (based on my previous plan), 
+          // but I should check if I used 'document_url' in the SQL migration.
+          // The previous code had 'document_url'. 
+          // My migration 'fix_leave_requests_schema.sql' added 'attachment_url'.
+          // I will use 'attachment_url' here to match the new schema.
+          attachment_url: attachmentUrl,
           status: 'pending',
         });
 
@@ -104,13 +136,13 @@ export default function Leave() {
 
       const msg = 'Leave request submitted successfully!';
       Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
-      
+
       setStartDate('');
       setEndDate('');
       setReason('');
       setDocument(null);
       setShowForm(false);
-      
+
       loadRequests();
     } catch (error: any) {
       const msg = error.message || 'Failed to submit request';
@@ -141,7 +173,7 @@ export default function Leave() {
       {showForm && (
         <View style={styles.form}>
           <Text style={styles.formTitle}>New Leave Request</Text>
-          
+
           <Text style={styles.label}>Leave Type:</Text>
           <View style={styles.typeButtons}>
             {['sick', 'vacation', 'casual', 'unpaid'].map((type) => (
@@ -153,21 +185,21 @@ export default function Leave() {
               />
             ))}
           </View>
-          
+
           <TextInput
             style={styles.input}
             placeholder="Start Date (YYYY-MM-DD) *"
             value={startDate}
             onChangeText={setStartDate}
           />
-          
+
           <TextInput
             style={styles.input}
             placeholder="End Date (YYYY-MM-DD) *"
             value={endDate}
             onChangeText={setEndDate}
           />
-          
+
           <TextInput
             style={[styles.input, styles.textArea]}
             placeholder="Reason *"
@@ -176,7 +208,7 @@ export default function Leave() {
             multiline
             numberOfLines={4}
           />
-          
+
           {leaveType === 'sick' && (
             <View style={styles.documentSection}>
               <Text style={styles.label}>Medical Certificate:</Text>
@@ -186,7 +218,7 @@ export default function Leave() {
               )}
             </View>
           )}
-          
+
           <Button
             title={submitting ? "Submitting..." : "Submit Request"}
             onPress={submitRequest}
@@ -197,7 +229,7 @@ export default function Leave() {
 
       <View style={styles.requestsList}>
         <Text style={styles.sectionTitle}>Your Requests ({requests.length})</Text>
-        
+
         {requests.map((req) => (
           <View key={req.id} style={styles.requestCard}>
             <View style={styles.requestHeader}>
