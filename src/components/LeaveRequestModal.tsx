@@ -1,7 +1,10 @@
-import { useState } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, Image, TextInput, Alert, ActivityIndicator, ScrollView, Platform, SafeAreaView } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../constants/Theme';
+import { ModernCard } from './ModernCard';
 
 type LeaveRequestModalProps = {
     visible: boolean;
@@ -25,8 +28,6 @@ export default function LeaveRequestModal({ visible, onClose, request, onUpdate 
 
         if (Platform.OS === 'web') {
             if (!window.confirm(confirmMsg)) return;
-        } else {
-            // Native alert logic (omitted for brevity, handled similar to other components)
         }
 
         setProcessing(true);
@@ -69,94 +70,120 @@ export default function LeaveRequestModal({ visible, onClose, request, onUpdate 
             presentationStyle="pageSheet"
             onRequestClose={onClose}
         >
-            <View style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Leave Request Details</Text>
-                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-                        <Text style={styles.closeText}>Close</Text>
-                    </TouchableOpacity>
-                </View>
-
-                <ScrollView style={styles.content}>
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Employee</Text>
-                        <Text style={styles.valueText}>{request.profiles?.first_name} {request.profiles?.last_name}</Text>
+            <SafeAreaView style={styles.safe}>
+                <View style={styles.container}>
+                    <View style={styles.header}>
+                        <View>
+                            <Text style={styles.title}>Request Review</Text>
+                            <Text style={styles.subtitle}>Leave application details</Text>
+                        </View>
+                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                            <Ionicons name="close" size={24} color={THEME.colors.text.primary} />
+                        </TouchableOpacity>
                     </View>
 
-                    <View style={styles.row}>
-                        <View style={[styles.section, { flex: 1 }]}>
-                            <Text style={styles.label}>Type</Text>
-                            <Text style={styles.valueText}>{request.type}</Text>
-                        </View>
-                        <View style={[styles.section, { flex: 1 }]}>
-                            <Text style={styles.label}>Duration</Text>
-                            <Text style={styles.valueText}>{request.start_date} to {request.end_date}</Text>
-                        </View>
-                    </View>
-
-                    <View style={styles.section}>
-                        <Text style={styles.label}>Reason</Text>
-                        <View style={styles.box}>
-                            <Text style={styles.bodyText}>{request.reason}</Text>
-                        </View>
-                    </View>
-
-                    {request.attachment_url && (
-                        <View style={styles.section}>
-                            <Text style={styles.label}>Attachment</Text>
-                            <TouchableOpacity onPress={() => setImageModalVisible(true)}>
-                                <Image
-                                    source={{ uri: request.attachment_url }}
-                                    style={styles.thumbnail}
-                                    resizeMode="cover"
-                                />
-                                <Text style={styles.hint}>Tap to view full screen</Text>
-                            </TouchableOpacity>
-                        </View>
-                    )}
-
-                    {request.status === 'pending' && (
-                        <View style={styles.actionSection}>
-                            <Text style={styles.label}>Reviewer Note (Optional)</Text>
-                            <TextInput
-                                style={styles.input}
-                                placeholder="Add a note..."
-                                value={note}
-                                onChangeText={setNote}
-                                multiline
-                            />
-
-                            <View style={styles.buttonRow}>
-                                <TouchableOpacity
-                                    style={[styles.button, styles.rejectButton]}
-                                    onPress={() => handleAction('rejected')}
-                                    disabled={processing}
-                                >
-                                    <Text style={styles.buttonText}>Reject</Text>
-                                </TouchableOpacity>
-
-                                <TouchableOpacity
-                                    style={[styles.button, styles.approveButton]}
-                                    onPress={() => handleAction('approved')}
-                                    disabled={processing}
-                                >
-                                    {processing ? (
-                                        <ActivityIndicator color="white" />
-                                    ) : (
-                                        <Text style={styles.buttonText}>Approve</Text>
-                                    )}
-                                </TouchableOpacity>
+                    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                        <ModernCard style={styles.mainCard}>
+                            <View style={styles.userInfo}>
+                                <View style={styles.avatar}>
+                                    <Text style={styles.avatarText}>{request.profiles?.first_name[0]}</Text>
+                                </View>
+                                <View>
+                                    <Text style={styles.userName}>{request.profiles?.first_name} {request.profiles?.last_name}</Text>
+                                    <Text style={styles.userRole}>{request.profiles?.role?.toUpperCase()}</Text>
+                                </View>
                             </View>
-                        </View>
-                    )}
-                </ScrollView>
-            </View>
 
-            {/* Image Viewer Modal */}
-            <Modal visible={imageModalVisible} transparent={true} onRequestClose={() => setImageModalVisible(false)}>
-                <View style={styles.imageModalBg}>
-                    <TouchableOpacity style={styles.imageClose} onPress={() => setImageModalVisible(false)}>
-                        <Text style={{ color: 'white', fontSize: 18, fontWeight: 'bold' }}>Close</Text>
+                            <View style={styles.divider} />
+
+                            <View style={styles.detailGrid}>
+                                <View style={styles.detailItem}>
+                                    <Text style={styles.label}>LEAVE TYPE</Text>
+                                    <View style={styles.typeBadge}>
+                                        <Text style={styles.typeText}>{request.type?.toUpperCase()}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.detailItem}>
+                                    <Text style={styles.label}>PERIOD</Text>
+                                    <Text style={styles.valueText}>
+                                        {new Date(request.start_date).toLocaleDateString()} — {new Date(request.end_date).toLocaleDateString()}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <View style={styles.reasonSection}>
+                                <Text style={styles.label}>REASON FOR LEAVE</Text>
+                                <View style={styles.reasonBox}>
+                                    <Text style={styles.bodyText}>{request.reason || 'No reason specified'}</Text>
+                                </View>
+                            </View>
+
+                            {request.attachment_url && (
+                                <View style={styles.attachmentSection}>
+                                    <Text style={styles.label}>SUPPORTING DOCUMENT</Text>
+                                    <TouchableOpacity
+                                        style={styles.attachmentCard}
+                                        onPress={() => setImageModalVisible(true)}
+                                        activeOpacity={0.9}
+                                    >
+                                        <Image
+                                            source={{ uri: request.attachment_url }}
+                                            style={styles.thumbnail}
+                                            resizeMode="cover"
+                                        />
+                                        <View style={styles.attachmentOverlay}>
+                                            <Ionicons name="expand" size={20} color="white" />
+                                            <Text style={styles.viewText}>Tap to enlarge</Text>
+                                        </View>
+                                    </TouchableOpacity>
+                                </View>
+                            )}
+                        </ModernCard>
+
+                        {request.status === 'pending' && (
+                            <View style={styles.actionSection}>
+                                <Text style={styles.label}>REVIEWER'S NOTE (OPTIONAL)</Text>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Add feedback for the employee..."
+                                    value={note}
+                                    onChangeText={setNote}
+                                    multiline
+                                />
+
+                                <View style={styles.buttonRow}>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, styles.rejectBtn]}
+                                        onPress={() => handleAction('rejected')}
+                                        disabled={processing}
+                                    >
+                                        <Text style={styles.rejectText}>Reject</Text>
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, styles.approveBtn]}
+                                        onPress={() => handleAction('approved')}
+                                        disabled={processing}
+                                    >
+                                        {processing ? (
+                                            <ActivityIndicator color="white" />
+                                        ) : (
+                                            <Text style={styles.approveText}>Approve</Text>
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        )}
+                        <View style={{ height: 40 }} />
+                    </ScrollView>
+                </View>
+            </SafeAreaView>
+
+            {/* Image Viewer */}
+            <Modal visible={imageModalVisible} transparent={true} animationType="fade">
+                <View style={styles.imageViewerBg}>
+                    <TouchableOpacity style={styles.viewerClose} onPress={() => setImageModalVisible(false)}>
+                        <Ionicons name="close" size={32} color="white" />
                     </TouchableOpacity>
                     <Image
                         source={{ uri: request.attachment_url }}
@@ -170,28 +197,43 @@ export default function LeaveRequestModal({ visible, onClose, request, onUpdate 
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f9f9f9' },
-    header: { flexDirection: 'row', justifyContent: 'space-between', padding: 20, backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#eee', alignItems: 'center' },
-    title: { fontSize: 20, fontWeight: 'bold' },
-    closeButton: { padding: 8 },
-    closeText: { color: '#2196f3', fontSize: 16 },
-    content: { padding: 20 },
-    section: { marginBottom: 20 },
-    label: { fontSize: 14, color: '#666', marginBottom: 6, fontWeight: '600' },
-    valueText: { fontSize: 18, color: '#333' },
-    bodyText: { fontSize: 16, color: '#444', lineHeight: 24 },
-    box: { backgroundColor: 'white', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#ddd' },
-    row: { flexDirection: 'row', gap: 16 },
-    thumbnail: { width: '100%', height: 200, borderRadius: 8, backgroundColor: '#eee' },
-    hint: { textAlign: 'center', color: '#888', marginTop: 8, fontSize: 12 },
-    actionSection: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderColor: '#ccc' },
-    input: { backgroundColor: 'white', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#ddd', marginBottom: 20, minHeight: 80, textAlignVertical: 'top' },
-    buttonRow: { flexDirection: 'row', gap: 16 },
-    button: { flex: 1, padding: 16, borderRadius: 8, alignItems: 'center' },
-    approveButton: { backgroundColor: '#4caf50' },
-    rejectButton: { backgroundColor: '#f44336' },
-    buttonText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-    imageModalBg: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
-    fullImage: { width: '100%', height: '80%' },
-    imageClose: { position: 'absolute', top: 40, right: 20, padding: 10, zIndex: 10 }
+    safe: { flex: 1, backgroundColor: 'white' },
+    container: { flex: 1, backgroundColor: THEME.colors.background },
+    header: { flexDirection: 'row', justifyContent: 'space-between', padding: 24, backgroundColor: 'white', borderBottomWidth: 1, borderColor: THEME.colors.border, alignItems: 'center' },
+    title: { fontSize: 22, fontWeight: 'bold', color: THEME.colors.text.primary },
+    subtitle: { fontSize: 13, color: THEME.colors.text.muted, marginTop: 2 },
+    closeBtn: { padding: 8, backgroundColor: '#f5f5f5', borderRadius: 12 },
+    content: { flex: 1, padding: 20 },
+    mainCard: { padding: 20, marginBottom: 24 },
+    userInfo: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+    avatar: { width: 50, height: 50, borderRadius: 25, backgroundColor: THEME.colors.primary + '15', justifyContent: 'center', alignItems: 'center' },
+    avatarText: { color: THEME.colors.primary, fontSize: 20, fontWeight: 'bold' },
+    userName: { fontSize: 18, fontWeight: 'bold', color: THEME.colors.text.primary },
+    userRole: { fontSize: 11, color: THEME.colors.text.muted, marginTop: 2, letterSpacing: 1 },
+    divider: { height: 1, backgroundColor: THEME.colors.border, marginVertical: 20 },
+    detailGrid: { gap: 16 },
+    detailItem: { gap: 8 },
+    label: { fontSize: 10, fontWeight: 'bold', color: THEME.colors.text.muted, letterSpacing: 0.5 },
+    typeBadge: { alignSelf: 'flex-start', backgroundColor: THEME.colors.primary + '10', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+    typeText: { fontSize: 12, color: THEME.colors.primary, fontWeight: 'bold' },
+    valueText: { fontSize: 16, fontWeight: '600', color: THEME.colors.text.primary },
+    reasonSection: { marginTop: 20 },
+    reasonBox: { backgroundColor: '#F8F9FA', padding: 16, borderRadius: 16 },
+    bodyText: { fontSize: 14, color: THEME.colors.text.secondary, lineHeight: 22 },
+    attachmentSection: { marginTop: 24 },
+    attachmentCard: { borderRadius: 16, overflow: 'hidden', height: 200, backgroundColor: '#eee' },
+    thumbnail: { width: '100%', height: '100%' },
+    attachmentOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.3)', justifyContent: 'center', alignItems: 'center', gap: 6 },
+    viewText: { color: 'white', fontSize: 12, fontWeight: 'bold' },
+    actionSection: { marginTop: 8 },
+    input: { backgroundColor: 'white', borderVertical: 1, borderColor: THEME.colors.border, borderRadius: 16, padding: 16, fontSize: 15, color: THEME.colors.text.primary, minHeight: 100, textAlignVertical: 'top', marginTop: 12 },
+    buttonRow: { flexDirection: 'row', gap: 16, marginTop: 24 },
+    actionBtn: { flex: 1, padding: 16, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
+    approveBtn: { backgroundColor: THEME.colors.success },
+    rejectBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: THEME.colors.error },
+    approveText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+    rejectText: { color: THEME.colors.error, fontWeight: 'bold', fontSize: 16 },
+    imageViewerBg: { flex: 1, backgroundColor: 'black', justifyContent: 'center', alignItems: 'center' },
+    fullImage: { width: '100%', height: '85%' },
+    viewerClose: { position: 'absolute', top: 50, right: 24, zIndex: 10, padding: 8 }
 });

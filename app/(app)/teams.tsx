@@ -1,32 +1,23 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
-import ManageLeadersModal from '../../src/components/ManageLeadersModal';
+import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../../src/constants/Theme';
+import { ModernCard } from '../../src/components/ModernCard';
 
 type Team = {
     id: string;
     name: string;
     description: string;
     created_at: string;
-    manager_count?: number;
-    member_count?: number;
-};
-
-type Employee = {
-    id: string;
-    first_name: string;
-    last_name: string;
-    email: string;
-    role: string;
 };
 
 export default function Teams() {
     const { user } = useAuth();
-    const router = useRouter(); // Initialize router
+    const router = useRouter();
     const [teams, setTeams] = useState<Team[]>([]);
-    const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
     const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -41,50 +32,20 @@ export default function Teams() {
 
     async function loadData() {
         try {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('company_id, role')
-                .eq('id', user?.id)
-                .single();
-
+            const { data: profile } = await supabase.from('profiles').select('company_id, role').eq('id', user?.id).single();
             if (!profile?.company_id) return;
 
-            // Redirect if Manager
             if (profile.role === 'manager') {
-                // Get managed team
-                const { data: managerData } = await supabase
-                    .from('team_managers')
-                    .select('team_id')
-                    .eq('manager_id', user?.id)
-                    .single();
-
+                const { data: managerData } = await supabase.from('team_managers').select('team_id').eq('manager_id', user?.id).single();
                 if (managerData) {
                     router.replace(`/(app)/teams/${managerData.team_id}`);
                     return;
                 }
             }
 
-            // Load teams (Admin/CEO/HR only)
-            const { data: teamsData, error: teamsError } = await supabase
-                .from('teams')
-                .select('*')
-                .eq('company_id', profile.company_id)
-                .order('created_at', { ascending: false });
-
-            if (teamsError) throw teamsError;
-            setTeams(teamsData || []);
-
-            // Load employees for manager assignment
-            const { data: employeesData, error: employeesError } = await supabase
-                .from('profiles')
-                .select('id, first_name, last_name, email, role')
-                .eq('company_id', profile.company_id)
-                .in('role', ['employee', 'manager']);
-
-            if (employeesError) throw employeesError;
-            console.log('Fetched eligible employees:', employeesData?.length, employeesData?.map(e => `${e.first_name} (${e.role})`));
-            setEmployees(employeesData || []);
-
+            const { data, error } = await supabase.from('teams').select('*').eq('company_id', profile.company_id).order('created_at', { ascending: false });
+            if (error) throw error;
+            setTeams(data || []);
         } catch (error) {
             console.error('Error loading data:', error);
         } finally {
@@ -94,270 +55,157 @@ export default function Teams() {
 
     async function createTeam() {
         if (!teamName) {
-            const msg = 'Please enter a department name';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+            Platform.OS === 'web' ? alert('Name required') : Alert.alert('Error', 'Name required');
             return;
         }
 
         setCreating(true);
-
         try {
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('company_id')
-                .eq('id', user?.id)
-                .single();
+            const { data: profile } = await supabase.from('profiles').select('company_id').eq('id', user?.id).single();
+            if (!profile?.company_id) throw new Error('Company not found');
 
-            if (!profile?.company_id) {
-                throw new Error('Company not found');
-            }
-
-            const { error } = await supabase
-                .from('teams')
-                .insert({
-                    company_id: profile.company_id,
-                    name: teamName,
-                    description: teamDescription,
-                });
-
+            const { error } = await supabase.from('teams').insert({ company_id: profile.company_id, name: teamName, description: teamDescription });
             if (error) throw error;
-
-            const msg = 'Department created successfully!';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
 
             setTeamName('');
             setTeamDescription('');
             setShowCreateForm(false);
-
             loadData();
         } catch (error: any) {
-            const msg = error.message || 'Failed to create team';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+            Alert.alert('Error', error.message);
         } finally {
             setCreating(false);
         }
     }
 
     async function deleteTeam(teamId: string) {
-        const confirmMsg = 'Are you sure you want to delete this department?';
-        const confirmed = Platform.OS === 'web'
-            ? window.confirm(confirmMsg)
-            : await new Promise((resolve) => {
-                Alert.alert(
-                    'Confirm Delete',
-                    confirmMsg,
-                    [
-                        { text: 'Cancel', onPress: () => resolve(false), style: 'cancel' },
-                        { text: 'Delete', onPress: () => resolve(true), style: 'destructive' },
-                    ]
-                );
-            });
-
+        const confirmed = Platform.OS === 'web' ? window.confirm('Delete this department?') : await new Promise(r => Alert.alert('Confirm', 'Delete this department?', [{ text: 'Cancel', onPress: () => r(false) }, { text: 'Delete', onPress: () => r(true), style: 'destructive' }]));
         if (!confirmed) return;
 
         try {
-            const { error } = await supabase
-                .from('teams')
-                .delete()
-                .eq('id', teamId);
-
+            const { error } = await supabase.from('teams').delete().eq('id', teamId);
             if (error) throw error;
-
-            const msg = 'Department deleted successfully';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
-
             loadData();
         } catch (error: any) {
-            const msg = error.message || 'Failed to delete team';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+            Alert.alert('Error', error.message);
         }
     }
 
     if (loading) {
         return (
-            <View style={styles.container}>
-                <Text>Loading departments...</Text>
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color={THEME.colors.primary} />
             </View>
         );
     }
 
     return (
-        <ScrollView style={styles.container}>
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
             <View style={styles.header}>
-                <Text style={styles.title}>Department Management</Text>
-                <Button
-                    title={showCreateForm ? "Cancel" : "Create Department"}
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                    style={[styles.createToggle, { backgroundColor: showCreateForm ? THEME.colors.error : THEME.colors.primary }]}
                     onPress={() => setShowCreateForm(!showCreateForm)}
-                />
+                >
+                    <Ionicons name={showCreateForm ? "close" : "add"} size={24} color="white" />
+                </TouchableOpacity>
             </View>
 
-            {showCreateForm && (
-                <View style={styles.createForm}>
-                    <Text style={styles.formTitle}>Create New Department</Text>
-
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Department Name *"
-                        value={teamName}
-                        onChangeText={setTeamName}
-                    />
-
-                    <TextInput
-                        style={[styles.input, styles.textArea]}
-                        placeholder="Description (optional)"
-                        value={teamDescription}
-                        onChangeText={setTeamDescription}
-                        multiline
-                        numberOfLines={3}
-                    />
-
-                    <Button
-                        title={creating ? "Creating..." : "Create Department"}
-                        onPress={createTeam}
-                        disabled={creating}
-                    />
-                </View>
-            )}
-
-            <View style={styles.teamsList}>
-                <Text style={styles.sectionTitle}>Departments ({teams.length})</Text>
+            <ScrollView contentContainerStyle={styles.scrollContent}>
+                {showCreateForm && (
+                    <ModernCard style={styles.formCard}>
+                        <Text style={styles.formHeading}>New Department</Text>
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Department Name *"
+                            value={teamName}
+                            onChangeText={setTeamName}
+                        />
+                        <TextInput
+                            style={[styles.input, styles.textArea]}
+                            placeholder="Description (optional)"
+                            value={teamDescription}
+                            onChangeText={setTeamDescription}
+                            multiline
+                            numberOfLines={3}
+                        />
+                        <TouchableOpacity style={styles.submitBtn} onPress={createTeam} disabled={creating}>
+                            {creating ? <ActivityIndicator color="white" /> : <Text style={styles.submitBtnText}>Create Department</Text>}
+                        </TouchableOpacity>
+                    </ModernCard>
+                )}
 
                 {teams.length === 0 ? (
-                    <View style={styles.emptyState}>
-                        <Text style={styles.emptyText}>No departments created yet</Text>
+                    <View style={styles.emptyCenter}>
+                        <Ionicons name="business-outline" size={64} color={THEME.colors.text.muted} />
+                        <Text style={styles.emptyText}>No departments found</Text>
                     </View>
                 ) : (
                     teams.map((team) => (
-                        <View key={team.id} style={styles.teamCard}>
-                            <View style={styles.teamHeader}>
-                                <View style={styles.teamInfo}>
-                                    <Text style={styles.teamName}>{team.name}</Text>
-                                    {team.description && (
-                                        <Text style={styles.teamDescription}>{team.description}</Text>
-                                    )}
-                                    <Text style={styles.teamDate}>
-                                        Created: {new Date(team.created_at).toLocaleDateString()}
-                                    </Text>
+                        <TouchableOpacity key={team.id} activeOpacity={0.9} onPress={() => router.push(`/(app)/teams/${team.id}`)}>
+                            <ModernCard style={styles.teamCard}>
+                                <View style={styles.cardHeader}>
+                                    <View style={styles.iconBox}>
+                                        <Ionicons name="business" size={24} color={THEME.colors.primary} />
+                                    </View>
+                                    <View style={styles.teamInfo}>
+                                        <Text style={styles.teamName}>{team.name}</Text>
+                                        <Text style={styles.teamDate}>Since {new Date(team.created_at).toLocaleDateString()}</Text>
+                                    </View>
+                                    <View style={styles.cardActions}>
+                                        <TouchableOpacity onPress={() => deleteTeam(team.id)} style={styles.deleteBtn}>
+                                            <Ionicons name="trash-outline" size={20} color={THEME.colors.error} />
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
-                            </View>
-
-                            <View style={styles.teamActions}>
-                                <Button
-                                    title="Manage Department"
-                                    onPress={() => router.push(`/(app)/teams/${team.id}`)}
-                                    color="#2196f3"
-                                />
-                                <Button
-                                    title="Delete"
-                                    onPress={() => deleteTeam(team.id)}
-                                    color="#f44336"
-                                />
-                            </View>
-                        </View>
+                                {team.description && (
+                                    <Text style={styles.teamDescription} numberOfLines={2}>{team.description}</Text>
+                                )}
+                                <View style={styles.cardFooter}>
+                                    <Text style={styles.manageText}>View Details</Text>
+                                    <Ionicons name="arrow-forward" size={16} color={THEME.colors.primary} />
+                                </View>
+                            </ModernCard>
+                        </TouchableOpacity>
                     ))
                 )}
-            </View>
-
-
-        </ScrollView>
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    header: {
-        backgroundColor: 'white',
-        padding: 16,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    createForm: {
-        backgroundColor: 'white',
-        margin: 16,
-        padding: 16,
-        borderRadius: 8,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    formTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 16,
-    },
-    input: {
-        backgroundColor: '#f5f5f5',
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 12,
-        borderWidth: 1,
-        borderColor: '#ddd',
-    },
-    textArea: {
-        height: 80,
-        textAlignVertical: 'top',
-    },
-    teamsList: {
-        padding: 16,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-    },
-    emptyState: {
-        padding: 40,
-        alignItems: 'center',
-    },
-    emptyText: {
-        fontSize: 16,
-        color: '#999',
-    },
-    teamCard: {
-        backgroundColor: 'white',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    teamHeader: {
-        marginBottom: 12,
-    },
-    teamInfo: {
-        flex: 1,
-    },
-    teamName: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    teamDescription: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 8,
-    },
-    teamDate: {
-        fontSize: 12,
-        color: '#999',
-    },
-    teamActions: {
-        flexDirection: 'row',
-        gap: 8,
-    },
+    container: { flex: 1, backgroundColor: THEME.colors.background },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: THEME.spacing.lg, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border },
+    backBtn: { padding: 8, marginLeft: -8 },
+    title: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary },
+    subtitle: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 2 },
+    createToggle: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center' },
+    scrollContent: { padding: THEME.spacing.lg },
+    formCard: { padding: THEME.spacing.lg, marginBottom: 24 },
+    formHeading: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: THEME.colors.text.primary },
+    input: { backgroundColor: '#f8f9fa', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#eee', fontSize: 15, marginBottom: 12 },
+    textArea: { height: 80, textAlignVertical: 'top' },
+    submitBtn: { backgroundColor: THEME.colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 8 },
+    submitBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
+    teamCard: { padding: 16, marginBottom: 16 },
+    cardHeader: { flexDirection: 'row', alignItems: 'center' },
+    iconBox: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#E3F2FD', justifyContent: 'center', alignItems: 'center' },
+    teamInfo: { flex: 1, marginLeft: 16 },
+    teamName: { fontSize: 18, fontWeight: 'bold', color: THEME.colors.text.primary },
+    teamDate: { fontSize: 12, color: THEME.colors.text.muted, marginTop: 2 },
+    cardActions: { marginLeft: 10 },
+    deleteBtn: { padding: 8 },
+    teamDescription: { fontSize: 14, color: THEME.colors.text.secondary, marginTop: 12, lineHeight: 20 },
+    cardFooter: { flexDirection: 'row', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+    manageText: { fontSize: 14, fontWeight: 'bold', color: THEME.colors.primary, marginRight: 4 },
+    emptyCenter: { flex: 1, alignItems: 'center', justifyContent: 'center', marginTop: 60 },
+    emptyText: { fontSize: 18, color: THEME.colors.text.muted, marginTop: 16 },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' }
 });
+
+
+

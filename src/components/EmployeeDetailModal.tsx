@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Button, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../constants/Theme';
+import { ModernCard } from './ModernCard';
 
 type EmployeeDetails = {
     id: string;
@@ -45,7 +47,6 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
         if (visible && employee) {
             fetchStats();
         } else {
-            // Reset to current month when closing/opening
             setCurrentDate(new Date());
             setStats(null);
         }
@@ -59,18 +60,15 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
 
     async function fetchStats() {
         if (!employee) return;
-
         setLoading(true);
         try {
-            const month = currentDate.getMonth() + 1; // 1-12
+            const month = currentDate.getMonth() + 1;
             const year = currentDate.getFullYear();
-
             const { data, error } = await supabase.rpc('get_monthly_employee_stats', {
                 p_employee_id: employee.id,
                 p_month: month,
                 p_year: year
             });
-
             if (error) throw error;
             setStats(data);
         } catch (error) {
@@ -90,7 +88,6 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
         if (!employee || !currentUser) return;
         setLoadingDM(true);
         try {
-            // 1. Check if DM already exists
             const { data: existing, error: fetchError } = await supabase
                 .from('chat_channels')
                 .select('id')
@@ -99,17 +96,13 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                 .maybeSingle();
 
             if (fetchError) throw fetchError;
-
             if (existing) {
                 onClose();
                 router.push(`/(app)/chat/${existing.id}`);
                 return;
             }
 
-            // 2. If not, create it
-            // Always set participant_a as the smaller ID to maintain uniqueness if needed
             const [pA, pB] = [currentUser.id, employee.id].sort();
-
             const { data: newChannel, error: createError } = await supabase
                 .from('chat_channels')
                 .insert({
@@ -122,7 +115,6 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                 .single();
 
             if (createError) throw createError;
-
             onClose();
             router.push(`/(app)/chat/${newChannel.id}`);
         } catch (err) {
@@ -138,102 +130,118 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
         <Modal
             visible={visible}
             transparent={true}
-            animationType="fade"
+            animationType="slide"
+            presentationStyle="overFullScreen"
             onRequestClose={onClose}
         >
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
-                    <ScrollView>
-                        <View style={styles.header}>
+                    <View style={styles.header}>
+                        <View style={styles.headerInfo}>
+                            <View style={styles.avatarLarge}>
+                                <Text style={styles.avatarTextLarge}>{employee.first_name[0]}</Text>
+                            </View>
                             <View>
                                 <Text style={styles.name}>{employee.first_name} {employee.last_name}</Text>
                                 <Text style={styles.jobTitle}>{employee.job_title || 'No Job Title'}</Text>
                             </View>
+                        </View>
+                        <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                            <Ionicons name="close" size={24} color={THEME.colors.text.primary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollArea}>
+                        <View style={styles.roleContainer}>
                             <View style={styles.roleBadge}>
+                                <Ionicons name="shield-checkmark" size={14} color={THEME.colors.primary} />
                                 <Text style={styles.roleText}>{employee.role.toUpperCase()}</Text>
                             </View>
-                        </View>
-
-                        <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Personal Information</Text>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.label}>Email:</Text>
-                                <Text style={styles.value}>{employee.email}</Text>
-                            </View>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.label}>Phone:</Text>
-                                <Text style={styles.value}>{employee.phone || 'N/A'}</Text>
-                            </View>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.label}>Gender:</Text>
-                                <Text style={styles.value}>{employee.gender ? employee.gender.charAt(0).toUpperCase() + employee.gender.slice(1) : 'N/A'}</Text>
+                            <View style={styles.deptBadge}>
+                                <Ionicons name="business" size={14} color={THEME.colors.text.secondary} />
+                                <Text style={styles.deptText}>{employee.department || 'Unassigned'}</Text>
                             </View>
                         </View>
 
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Employment Details</Text>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.label}>Department:</Text>
-                                <Text style={styles.value}>{employee.department || 'Unassigned'}</Text>
-                            </View>
-                            <View style={styles.infoRow}>
-                                <Text style={styles.label}>Base Salary:</Text>
-                                <Text style={styles.value}>
-                                    {stats?.baseSalary
-                                        ? `$${stats.baseSalary.toLocaleString()}`
-                                        : (employee.base_salary ? `$${employee.base_salary.toLocaleString()}` : 'N/A')}
-                                </Text>
-                            </View>
+                            <Text style={styles.sectionTitle}>Contact & Profile</Text>
+                            <ModernCard style={styles.infoCard}>
+                                <View style={styles.infoRow}>
+                                    <View style={styles.infoIcon}>
+                                        <Ionicons name="mail-outline" size={18} color={THEME.colors.text.muted} />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.infoLabel}>Email Address</Text>
+                                        <Text style={styles.infoValue}>{employee.email}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.divider} />
+                                <View style={styles.infoRow}>
+                                    <View style={styles.infoIcon}>
+                                        <Ionicons name="call-outline" size={18} color={THEME.colors.text.muted} />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.infoLabel}>Phone Number</Text>
+                                        <Text style={styles.infoValue}>{employee.phone || 'Not provided'}</Text>
+                                    </View>
+                                </View>
+                                <View style={styles.divider} />
+                                <View style={styles.infoRow}>
+                                    <View style={styles.infoIcon}>
+                                        <Ionicons name="person-outline" size={18} color={THEME.colors.text.muted} />
+                                    </View>
+                                    <View>
+                                        <Text style={styles.infoLabel}>Gender</Text>
+                                        <Text style={styles.infoValue}>{employee.gender ? employee.gender.charAt(0).toUpperCase() + employee.gender.slice(1) : 'Not specified'}</Text>
+                                    </View>
+                                </View>
+                            </ModernCard>
                         </View>
 
                         <View style={styles.section}>
-                            <View style={styles.sectionHeaderRow}>
-                                <Text style={styles.sectionTitle}>Performance & Attendance</Text>
-                                <View style={styles.dateFilter}>
-                                    <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.arrowBtn}>
-                                        <Text style={styles.arrowText}>{'<'}</Text>
+                            <View style={styles.sectionHeader}>
+                                <Text style={styles.sectionTitle}>Activity & Stats</Text>
+                                <View style={styles.monthPicker}>
+                                    <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNav}>
+                                        <Ionicons name="chevron-back" size={20} color={THEME.colors.text.secondary} />
                                     </TouchableOpacity>
-                                    <Text style={styles.dateText}>
+                                    <Text style={styles.monthLabel}>
                                         {currentDate.toLocaleDateString('default', { month: 'short', year: 'numeric' })}
                                     </Text>
-                                    <TouchableOpacity onPress={() => changeMonth(1)} style={styles.arrowBtn}>
-                                        <Text style={styles.arrowText}>{'>'}</Text>
+                                    <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNav}>
+                                        <Ionicons name="chevron-forward" size={20} color={THEME.colors.text.secondary} />
                                     </TouchableOpacity>
                                 </View>
                             </View>
 
                             {loading ? (
-                                <ActivityIndicator size="small" color="#2196f3" style={{ padding: 20 }} />
+                                <ActivityIndicator style={{ margin: 30 }} color={THEME.colors.primary} />
                             ) : (
-                                <>
-                                    <View style={styles.statsGrid}>
-                                        <View style={styles.statBox}>
-                                            <Text style={styles.statValue}>{stats?.attendanceRate ?? 0}%</Text>
-                                            <Text style={styles.statLabel}>Attendance Rate</Text>
-                                        </View>
-                                        <View style={styles.statBox}>
-                                            <Text style={styles.statValue}>{stats?.daysPresent ?? 0}</Text>
-                                            <Text style={styles.statLabel}>Days Present</Text>
-                                        </View>
-                                        <View style={styles.statBox}>
-                                            <Text style={styles.statValue}>{stats?.daysAbsent ?? 0}</Text>
-                                            <Text style={styles.statLabel}>Days Absent</Text>
-                                        </View>
-                                        <View style={styles.statBox}>
-                                            <Text style={styles.statValue}>{stats?.leavesUsed ?? 0} / {stats?.leavesAllowed ?? employee.stats?.leavesAllowed ?? 21}</Text>
-                                            <Text style={styles.statLabel}>Leave Days Used</Text>
-                                        </View>
+                                <View style={styles.statsGrid}>
+                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.primary + '08' }]}>
+                                        <Text style={[styles.statVal, { color: THEME.colors.primary }]}>{stats?.attendanceRate ?? 0}%</Text>
+                                        <Text style={styles.statLab}>Attendance</Text>
                                     </View>
-                                </>
+                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.success + '08' }]}>
+                                        <Text style={[styles.statVal, { color: THEME.colors.success }]}>{stats?.daysPresent ?? 0}</Text>
+                                        <Text style={styles.statLab}>Present</Text>
+                                    </View>
+                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.error + '08' }]}>
+                                        <Text style={[styles.statVal, { color: THEME.colors.error }]}>{stats?.daysAbsent ?? 0}</Text>
+                                        <Text style={styles.statLab}>Absent</Text>
+                                    </View>
+                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.warning + '08' }]}>
+                                        <Text style={[styles.statVal, { color: THEME.colors.warning }]}>{stats?.leavesUsed ?? 0}</Text>
+                                        <Text style={styles.statLab}>Leaves</Text>
+                                    </View>
+                                </View>
                             )}
                         </View>
 
-                        <Button title="Close" onPress={onClose} />
-
-                        {(employee.role === 'manager' || employee.role === 'admin' || employee.role === 'ceo' || employee.role === 'hr') && employee.id !== currentUser?.id && (
-                            <View style={{ marginTop: 12 }}>
+                        <View style={styles.actions}>
+                            {(employee.role !== 'ceo') && employee.id !== currentUser?.id && (
                                 <TouchableOpacity
-                                    style={[styles.messageButton, loadingDM && { opacity: 0.7 }]}
+                                    style={[styles.msgBtn, loadingDM && { opacity: 0.7 }]}
                                     onPress={startDM}
                                     disabled={loadingDM}
                                 >
@@ -241,13 +249,17 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                                         <ActivityIndicator color="white" size="small" />
                                     ) : (
                                         <>
-                                            <Ionicons name="chatbubble-ellipses" size={20} color="white" style={{ marginRight: 8 }} />
-                                            <Text style={styles.messageButtonText}>Message {employee.first_name}</Text>
+                                            <Ionicons name="chatbubble-ellipses" size={20} color="white" />
+                                            <Text style={styles.msgBtnText}>Message {employee.first_name}</Text>
                                         </>
                                     )}
                                 </TouchableOpacity>
-                            </View>
-                        )}
+                            )}
+                            <TouchableOpacity style={styles.closeActionBtn} onPress={onClose}>
+                                <Text style={styles.closeActionText}>Back to List</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <View style={{ height: 40 }} />
                     </ScrollView>
                 </View>
             </View>
@@ -258,152 +270,216 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
 const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        padding: 20,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'flex-end',
     },
     modalContent: {
         backgroundColor: 'white',
-        borderRadius: 16,
-        padding: 24,
-        maxHeight: '85%',
+        borderTopLeftRadius: 32,
+        borderTopRightRadius: 32,
+        height: '90%',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 6,
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.1,
+        shadowRadius: 10,
+        elevation: 20,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 24,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        alignItems: 'center',
+        padding: 24,
         paddingBottom: 16,
     },
-    name: {
-        fontSize: 24,
+    headerInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 16,
+    },
+    avatarLarge: {
+        width: 64,
+        height: 64,
+        borderRadius: 32,
+        backgroundColor: THEME.colors.primary + '15',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarTextLarge: {
+        color: THEME.colors.primary,
+        fontSize: 28,
         fontWeight: 'bold',
-        color: '#333',
-        marginBottom: 4,
+    },
+    name: {
+        fontSize: 22,
+        fontWeight: 'bold',
+        color: THEME.colors.text.primary,
     },
     jobTitle: {
-        fontSize: 16,
-        color: '#666',
-        fontWeight: '500',
+        fontSize: 14,
+        color: THEME.colors.text.muted,
+        marginTop: 2,
+    },
+    closeBtn: {
+        padding: 8,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 12,
+    },
+    scrollArea: {
+        flex: 1,
+        paddingHorizontal: 24,
+    },
+    roleContainer: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 24,
     },
     roleBadge: {
-        backgroundColor: '#e3f2fd',
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: THEME.colors.primary + '08',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
+        gap: 4,
+        borderWidth: 1,
+        borderColor: THEME.colors.primary + '20',
     },
     roleText: {
-        color: '#1976d2',
-        fontWeight: '700',
-        fontSize: 12,
+        color: THEME.colors.primary,
+        fontWeight: 'bold',
+        fontSize: 11,
+    },
+    deptBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0f2f5',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 20,
+        gap: 4,
+    },
+    deptText: {
+        color: THEME.colors.text.secondary,
+        fontWeight: '600',
+        fontSize: 11,
     },
     section: {
-        marginBottom: 24,
+        marginBottom: 32,
+    },
+    sectionHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 16,
     },
     sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#333',
-        marginBottom: 12,
-        borderLeftWidth: 3,
-        borderLeftColor: '#2196f3',
-        paddingLeft: 8,
+        fontSize: 17,
+        fontWeight: 'bold',
+        color: THEME.colors.text.primary,
+        marginBottom: 16,
+    },
+    infoCard: {
+        padding: 4,
     },
     infoRow: {
         flexDirection: 'row',
-        justifyContent: 'space-between',
-        marginBottom: 8,
-        paddingVertical: 4,
-        borderBottomWidth: 0.5,
-        borderBottomColor: '#f0f0f0',
+        alignItems: 'center',
+        padding: 16,
+        gap: 16,
     },
-    label: {
-        fontSize: 14,
-        color: '#666',
-        fontWeight: '500',
+    infoIcon: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#f8f9fa',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    value: {
-        fontSize: 14,
-        color: '#333',
+    infoLabel: {
+        fontSize: 11,
+        color: THEME.colors.text.muted,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    infoValue: {
+        fontSize: 15,
+        color: THEME.colors.text.primary,
         fontWeight: '600',
+        marginTop: 2,
     },
-    loadingText: {
-        fontStyle: 'italic',
-        color: '#999',
-        textAlign: 'center',
-        padding: 20,
+    divider: {
+        height: 1,
+        backgroundColor: THEME.colors.border,
+        marginHorizontal: 16,
+    },
+    monthPicker: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#f0f2f5',
+        borderRadius: 12,
+        padding: 4,
+    },
+    monthNav: {
+        padding: 4,
+    },
+    monthLabel: {
+        fontSize: 12,
+        fontWeight: 'bold',
+        color: THEME.colors.text.primary,
+        marginHorizontal: 8,
     },
     statsGrid: {
         flexDirection: 'row',
-        // flexWrap: 'wrap', // Removed wrap to keep in one row if 3 items
-        justifyContent: 'space-between',
-        gap: 12,
         flexWrap: 'wrap',
+        gap: 12,
     },
-    statBox: {
-        width: '48%', // 2 per row
-        backgroundColor: '#f9f9f9',
-        padding: 12,
-        borderRadius: 8,
-        alignItems: 'center',
-    },
-    sectionHeaderRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    dateFilter: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: '#f0f0f0',
+    statItem: {
+        flex: 1,
+        minWidth: '45%',
+        padding: 16,
         borderRadius: 20,
-        paddingHorizontal: 8,
-        paddingVertical: 4,
+        alignItems: 'center',
     },
-    arrowBtn: {
-        padding: 8,
-    },
-    arrowText: {
-        fontSize: 18,
+    statVal: {
+        fontSize: 20,
         fontWeight: 'bold',
-        color: '#666',
     },
-    dateText: {
-        fontWeight: '600',
-        marginHorizontal: 8,
-        color: '#333',
-    },
-    statValue: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#2196f3',
-        marginBottom: 4,
-    },
-    statLabel: {
+    statLab: {
         fontSize: 11,
-        color: '#666',
-        textAlign: 'center',
+        color: THEME.colors.text.secondary,
+        fontWeight: '600',
+        marginTop: 4,
     },
-    messageButton: {
-        backgroundColor: '#4caf50',
+    actions: {
+        gap: 12,
+        marginTop: 8,
+    },
+    msgBtn: {
+        backgroundColor: THEME.colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: 14,
-        borderRadius: 12,
-        marginTop: 8,
+        padding: 18,
+        borderRadius: 20,
+        gap: 10,
+        shadowColor: THEME.colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
-    messageButtonText: {
+    msgBtnText: {
         color: 'white',
         fontWeight: 'bold',
         fontSize: 16,
+    },
+    closeActionBtn: {
+        padding: 16,
+        alignItems: 'center',
+    },
+    closeActionText: {
+        color: THEME.colors.text.muted,
+        fontWeight: '600',
+        fontSize: 15,
     },
 });

@@ -1,7 +1,11 @@
-import { useState, useEffect } from 'react';
-import { View, Text, Button, StyleSheet, ScrollView, Alert, Platform, TextInput } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, RefreshControl } from 'react-native';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../../src/constants/Theme';
+import { ModernCard } from '../../src/components/ModernCard';
+import { useRouter } from 'expo-router';
 
 type LeaveRequest = {
     id: string;
@@ -15,15 +19,16 @@ type LeaveRequest = {
     approved_by: string | null;
     approved_at: string | null;
     rejection_reason: string | null;
-    // Joined data
     employee_name?: string;
     employee_email?: string;
 };
 
 export default function Approvals() {
     const { user } = useAuth();
+    const router = useRouter();
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [filter, setFilter] = useState<'pending' | 'all'>('pending');
     const [processingId, setProcessingId] = useState<string | null>(null);
 
@@ -33,7 +38,6 @@ export default function Approvals() {
 
     async function loadRequests() {
         try {
-            // Get current user's profile to check role and company
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('company_id, role')
@@ -42,17 +46,16 @@ export default function Approvals() {
 
             if (!profile?.company_id) return;
 
-            // Build query based on filter
             let query = supabase
                 .from('leave_requests')
                 .select(`
-          *,
-          profiles!leave_requests_employee_id_fkey (
-            first_name,
-            last_name,
-            email
-          )
-        `)
+                    *,
+                    profiles!leave_requests_employee_id_fkey (
+                        first_name,
+                        last_name,
+                        email
+                    )
+                `)
                 .eq('company_id', profile.company_id)
                 .order('created_at', { ascending: false });
 
@@ -61,10 +64,8 @@ export default function Approvals() {
             }
 
             const { data, error } = await query;
-
             if (error) throw error;
 
-            // Transform data to include employee name
             const transformedData = (data || []).map((req: any) => ({
                 ...req,
                 employee_name: req.profiles
@@ -78,8 +79,14 @@ export default function Approvals() {
             console.error('Error loading leave requests:', error);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     }
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadRequests();
+    };
 
     async function handleApprove(requestId: string) {
         setProcessingId(requestId);
@@ -95,35 +102,31 @@ export default function Approvals() {
 
             if (error) throw error;
 
-            const msg = 'Leave request approved successfully';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
-
+            if (Platform.OS === 'web') {
+                alert('Leave request approved');
+            } else {
+                Alert.alert('Success', 'Leave request approved');
+            }
             loadRequests();
         } catch (error: any) {
-            const msg = error.message || 'Failed to approve request';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+            Alert.alert('Error', error.message || 'Failed to approve');
         } finally {
             setProcessingId(null);
         }
     }
 
     async function handleReject(requestId: string) {
-        // Simple rejection for now - could add a modal for rejection reason
         if (Platform.OS === 'web') {
             const reason = prompt('Rejection reason (optional):');
-            await processRejection(requestId, reason || '');
+            if (reason !== null) await processRejection(requestId, reason);
         } else {
             Alert.prompt(
-                'Reject Leave Request',
+                'Reject Request',
                 'Enter rejection reason (optional):',
                 [
                     { text: 'Cancel', style: 'cancel' },
-                    {
-                        text: 'Reject',
-                        onPress: (reason) => processRejection(requestId, reason || ''),
-                    },
-                ],
-                'plain-text'
+                    { text: 'Reject', style: 'destructive', onPress: (reason) => processRejection(requestId, reason || '') },
+                ]
             );
         }
     }
@@ -142,14 +145,9 @@ export default function Approvals() {
                 .eq('id', requestId);
 
             if (error) throw error;
-
-            const msg = 'Leave request rejected';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
-
             loadRequests();
         } catch (error: any) {
-            const msg = error.message || 'Failed to reject request';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+            Alert.alert('Error', error.message);
         } finally {
             setProcessingId(null);
         }
@@ -157,224 +155,181 @@ export default function Approvals() {
 
     if (loading) {
         return (
-            <View style={styles.container}>
-                <Text>Loading leave requests...</Text>
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color={THEME.colors.primary} />
             </View>
         );
     }
 
     return (
-        <ScrollView style={styles.container}>
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
+
             <View style={styles.header}>
-                <Text style={styles.title}>Leave Approvals</Text>
-            </View>
-
-            <View style={styles.filterContainer}>
-                <Button
-                    title="Pending"
-                    onPress={() => setFilter('pending')}
-                    color={filter === 'pending' ? '#2196f3' : '#999'}
-                />
-                <Button
-                    title="All Requests"
-                    onPress={() => setFilter('all')}
-                    color={filter === 'all' ? '#2196f3' : '#999'}
-                />
-            </View>
-
-            {requests.length === 0 ? (
-                <View style={styles.emptyState}>
-                    <Text style={styles.emptyText}>
-                        {filter === 'pending'
-                            ? 'No pending leave requests'
-                            : 'No leave requests found'}
-                    </Text>
+                <View style={styles.headerTop}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                        <Ionicons name="chevron-back" size={28} color={THEME.colors.text.primary} />
+                    </TouchableOpacity>
                 </View>
-            ) : (
-                <View style={styles.requestsList}>
-                    <Text style={styles.sectionTitle}>
-                        {filter === 'pending' ? 'Pending Requests' : 'All Requests'} ({requests.length})
-                    </Text>
 
-                    {requests.map((req) => (
-                        <View key={req.id} style={styles.requestCard}>
-                            <View style={styles.requestHeader}>
-                                <View>
-                                    <Text style={styles.employeeName}>{req.employee_name}</Text>
-                                    <Text style={styles.employeeEmail}>{req.employee_email}</Text>
+                <View style={styles.filterContainer}>
+                    <TouchableOpacity
+                        style={[styles.filterBtn, filter === 'pending' && styles.filterBtnActive]}
+                        onPress={() => setFilter('pending')}
+                    >
+                        <Text style={[styles.filterText, filter === 'pending' && styles.filterTextActive]}>Pending</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                        style={[styles.filterBtn, filter === 'all' && styles.filterBtnActive]}
+                        onPress={() => setFilter('all')}
+                    >
+                        <Text style={[styles.filterText, filter === 'all' && styles.filterTextActive]}>History</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+            >
+                {requests.length === 0 ? (
+                    <View style={styles.emptyState}>
+                        <Ionicons name="checkmark-done-circle-outline" size={72} color={THEME.colors.success + '40'} />
+                        <Text style={styles.emptyText}>No {filter === 'pending' ? 'pending' : ''} requests found</Text>
+                    </View>
+                ) : (
+                    requests.map((req) => (
+                        <ModernCard key={req.id} style={styles.requestCard}>
+                            <View style={styles.cardHeader}>
+                                <View style={styles.userInfo}>
+                                    <View style={styles.avatarMini}>
+                                        <Text style={styles.avatarTextMini}>{req.employee_name ? req.employee_name[0] : 'U'}</Text>
+                                    </View>
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.employeeName}>{req.employee_name}</Text>
+                                        <Text style={styles.employeeEmail} numberOfLines={1}>{req.employee_email}</Text>
+                                    </View>
                                 </View>
                                 <View style={[
                                     styles.statusBadge,
-                                    req.status === 'approved' && styles.approvedBadge,
-                                    req.status === 'rejected' && styles.rejectedBadge,
+                                    req.status === 'approved' ? styles.approvedBadge :
+                                        req.status === 'rejected' ? styles.rejectedBadge : styles.pendingBadge
                                 ]}>
-                                    <Text style={styles.statusText}>{req.status.toUpperCase()}</Text>
+                                    <Text style={[
+                                        styles.statusText,
+                                        req.status === 'approved' ? styles.approvedText :
+                                            req.status === 'rejected' ? styles.rejectedText : styles.pendingText
+                                    ]}>
+                                        {req.status.toUpperCase()}
+                                    </Text>
                                 </View>
                             </View>
 
-                            <View style={styles.requestDetails}>
-                                <Text style={styles.leaveType}>
-                                    {req.leave_type.toUpperCase()} LEAVE
-                                </Text>
+                            <View style={styles.divider} />
+
+                            <View style={styles.detailsGroup}>
+                                <View style={styles.typeRow}>
+                                    <Ionicons name="calendar-outline" size={16} color={THEME.colors.primary} />
+                                    <Text style={styles.leaveType}>{req.leave_type.toUpperCase()} LEAVE</Text>
+                                </View>
                                 <Text style={styles.dates}>
-                                    {req.start_date} to {req.end_date}
-                                </Text>
-                                <Text style={styles.reason}>Reason: {req.reason}</Text>
-                                <Text style={styles.submittedDate}>
-                                    Submitted: {new Date(req.created_at).toLocaleDateString()}
+                                    {new Date(req.start_date).toLocaleDateString()} — {new Date(req.end_date).toLocaleDateString()}
                                 </Text>
 
+                                <View style={styles.reasonBox}>
+                                    <Text style={styles.reasonLabel}>REASON</Text>
+                                    <Text style={styles.reasonText}>{req.reason || 'No reason provided'}</Text>
+                                </View>
+
                                 {req.rejection_reason && (
-                                    <Text style={styles.rejectionReason}>
-                                        Rejection reason: {req.rejection_reason}
-                                    </Text>
+                                    <View style={styles.rejectionBox}>
+                                        <Text style={styles.rejectionLabel}>REJECTION REASON</Text>
+                                        <Text style={styles.rejectionText}>{req.rejection_reason}</Text>
+                                    </View>
                                 )}
+
+                                <Text style={styles.timestamp}>
+                                    Submitted on {new Date(req.created_at).toLocaleDateString()} at {new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </Text>
                             </View>
 
                             {req.status === 'pending' && (
-                                <View style={styles.actions}>
-                                    <View style={styles.actionButton}>
-                                        <Button
-                                            title={processingId === req.id ? "Processing..." : "Approve"}
-                                            onPress={() => handleApprove(req.id)}
-                                            disabled={processingId === req.id}
-                                            color="#4caf50"
-                                        />
-                                    </View>
-                                    <View style={styles.actionButton}>
-                                        <Button
-                                            title={processingId === req.id ? "Processing..." : "Reject"}
-                                            onPress={() => handleReject(req.id)}
-                                            disabled={processingId === req.id}
-                                            color="#f44336"
-                                        />
-                                    </View>
+                                <View style={styles.actionRow}>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, styles.rejectBtn]}
+                                        onPress={() => handleReject(req.id)}
+                                        disabled={processingId === req.id}
+                                    >
+                                        <Text style={styles.rejectBtnText}>Reject</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[styles.actionBtn, styles.approveBtn]}
+                                        onPress={() => handleApprove(req.id)}
+                                        disabled={processingId === req.id}
+                                    >
+                                        {processingId === req.id ? (
+                                            <ActivityIndicator size="small" color="white" />
+                                        ) : (
+                                            <Text style={styles.approveBtnText}>Approve</Text>
+                                        )}
+                                    </TouchableOpacity>
                                 </View>
                             )}
-                        </View>
-                    ))}
-                </View>
-            )}
-        </ScrollView>
+                        </ModernCard>
+                    ))
+                )}
+                <View style={{ height: 40 }} />
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    header: {
-        backgroundColor: 'white',
-        padding: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-    },
-    filterContainer: {
-        flexDirection: 'row',
-        padding: 16,
-        gap: 12,
-    },
-    emptyState: {
-        padding: 40,
-        alignItems: 'center',
-    },
-    emptyText: {
-        fontSize: 16,
-        color: '#999',
-    },
-    requestsList: {
-        padding: 16,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-    },
-    requestCard: {
-        backgroundColor: 'white',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    requestHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start',
-        marginBottom: 12,
-        paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#e0e0e0',
-    },
-    employeeName: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    employeeEmail: {
-        fontSize: 14,
-        color: '#666',
-    },
-    statusBadge: {
-        backgroundColor: '#fff3e0',
-        paddingHorizontal: 12,
-        paddingVertical: 4,
-        borderRadius: 12,
-    },
-    approvedBadge: {
-        backgroundColor: '#e8f5e9',
-    },
-    rejectedBadge: {
-        backgroundColor: '#ffebee',
-    },
-    statusText: {
-        fontSize: 12,
-        fontWeight: '600',
-        color: '#f57c00',
-    },
-    requestDetails: {
-        marginBottom: 12,
-    },
-    leaveType: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#2196f3',
-        marginBottom: 4,
-    },
-    dates: {
-        fontSize: 14,
-        fontWeight: '500',
-        marginBottom: 8,
-    },
-    reason: {
-        fontSize: 14,
-        color: '#333',
-        marginBottom: 4,
-    },
-    submittedDate: {
-        fontSize: 12,
-        color: '#999',
-    },
-    rejectionReason: {
-        fontSize: 13,
-        color: '#f44336',
-        marginTop: 8,
-        fontStyle: 'italic',
-    },
-    actions: {
-        flexDirection: 'row',
-        gap: 12,
-    },
-    actionButton: {
-        flex: 1,
-    },
+    container: { flex: 1, backgroundColor: THEME.colors.background },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    header: { backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border },
+    headerTop: { flexDirection: 'row', alignItems: 'center', padding: THEME.spacing.lg },
+    backBtn: { padding: 4 },
+    title: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary, marginLeft: 12 },
+    filterContainer: { flexDirection: 'row', paddingHorizontal: THEME.spacing.lg, paddingBottom: 12, gap: 12 },
+    filterBtn: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#f0f2f5', borderWidth: 1, borderColor: 'transparent' },
+    filterBtnActive: { backgroundColor: THEME.colors.primary + '15', borderColor: THEME.colors.primary },
+    filterText: { fontSize: 13, color: THEME.colors.text.secondary, fontWeight: '600' },
+    filterTextActive: { color: THEME.colors.primary },
+    scrollContent: { padding: THEME.spacing.lg },
+    emptyState: { alignItems: 'center', marginTop: 80, gap: 16 },
+    emptyText: { fontSize: 16, color: THEME.colors.text.muted, fontWeight: '500' },
+    requestCard: { padding: 16, marginBottom: 16 },
+    cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    userInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+    avatarMini: { width: 44, height: 44, borderRadius: 22, backgroundColor: THEME.colors.primary + '10', justifyContent: 'center', alignItems: 'center' },
+    avatarTextMini: { color: THEME.colors.primary, fontWeight: 'bold', fontSize: 18 },
+    employeeName: { fontSize: 17, fontWeight: 'bold', color: THEME.colors.text.primary },
+    employeeEmail: { fontSize: 12, color: THEME.colors.text.muted, marginTop: 2 },
+    statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+    statusText: { fontSize: 10, fontWeight: 'bold' },
+    pendingBadge: { backgroundColor: '#FFF3E0' },
+    pendingText: { color: '#E65100' },
+    approvedBadge: { backgroundColor: THEME.colors.success + '15' },
+    approvedText: { color: THEME.colors.success },
+    rejectedBadge: { backgroundColor: THEME.colors.error + '10' },
+    rejectedText: { color: THEME.colors.error },
+    divider: { height: 1, backgroundColor: THEME.colors.border, marginVertical: 16 },
+    detailsGroup: { gap: 12 },
+    typeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    leaveType: { fontSize: 12, fontWeight: 'bold', color: THEME.colors.primary, letterSpacing: 0.5 },
+    dates: { fontSize: 16, fontWeight: '700', color: THEME.colors.text.primary },
+    reasonBox: { backgroundColor: '#F8F9FA', padding: 12, borderRadius: 12 },
+    reasonLabel: { fontSize: 9, fontWeight: 'bold', color: THEME.colors.text.muted, marginBottom: 4 },
+    reasonText: { fontSize: 13, color: THEME.colors.text.secondary, lineHeight: 18 },
+    rejectionBox: { backgroundColor: THEME.colors.error + '05', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: THEME.colors.error + '10' },
+    rejectionLabel: { fontSize: 9, fontWeight: 'bold', color: THEME.colors.error, marginBottom: 4 },
+    rejectionText: { fontSize: 13, color: THEME.colors.error, fontStyle: 'italic' },
+    timestamp: { fontSize: 11, color: THEME.colors.text.muted, marginTop: 8 },
+    actionRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
+    actionBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    rejectBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: THEME.colors.error },
+    rejectBtnText: { color: THEME.colors.error, fontWeight: 'bold' },
+    approveBtn: { backgroundColor: THEME.colors.success },
+    approveBtnText: { color: 'white', fontWeight: 'bold' }
 });

@@ -1,8 +1,13 @@
-import { View, Text, Button, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, RefreshControl } from 'react-native';
 import { useAuth } from '../../src/context/AuthContext';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../src/services/supabase';
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../../src/constants/Theme';
+import { ModernCard } from '../../src/components/ModernCard';
+import { ActivityCard } from '../../src/components/ActivityCard';
+import { ProgressRing } from '../../src/components/ProgressRing';
 
 type Profile = {
     id: string;
@@ -11,100 +16,117 @@ type Profile = {
     email: string;
     role: string;
     company_id: string;
-};
-
-type Company = {
-    id: string;
-    name: string;
+    allowed_leave_days: number;
+    company?: { name: string };
 };
 
 export default function Dashboard() {
-    const { signOut, user } = useAuth();
+    const { user, signOut } = useAuth();
     const router = useRouter();
     const [profile, setProfile] = useState<Profile | null>(null);
-    const [company, setCompany] = useState<Company | null>(null);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    useEffect(() => {
-        loadUserData();
-    }, [user]);
+    // Real data states
+    const [checkInTime, setCheckInTime] = useState<string>('--:--');
+    const [isCheckedIn, setIsCheckedIn] = useState<boolean>(false);
+    const [unreadMessages, setUnreadMessages] = useState<number>(0);
+    const [remainingLeaves, setRemainingLeaves] = useState<number>(0);
+    const [latestPayslip, setLatestPayslip] = useState<string>('N/A');
+    const [daysPresent, setDaysPresent] = useState<number>(0);
+    const [attendanceRate, setAttendanceRate] = useState<number>(100);
 
-    async function loadUserData() {
+
+    const loadDashboardData = useCallback(async () => {
         if (!user) {
-            console.log('Dashboard - No user');
             setLoading(false);
             return;
         }
 
-        console.log('Dashboard - Loading data for user:', user.id);
-        console.log('Dashboard - User email:', user.email);
-
         try {
-            // Load profile
-            console.log('Dashboard - Fetching profile...');
+            // 1. Load profile & basic stats
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
-                .select('*')
+                .select('*, company:companies(name)')
                 .eq('id', user.id)
                 .single();
 
-            console.log('Dashboard - Profile query result:', { profileData, profileError });
-
-            if (profileError) {
-                console.error('Dashboard - Profile error:', profileError);
-                setError(`Profile error: ${profileError.message} (Code: ${profileError.code})`);
-
-                if (profileError.code === 'PGRST116') {
-                    setError('Profile not found. Your account may not be set up correctly.');
-                }
-
-                setLoading(false);
-                return;
-            }
-
-            if (!profileData) {
-                setError('No profile data returned');
-                setLoading(false);
-                return;
-            }
-
+            if (profileError) throw profileError;
             setProfile(profileData);
-            console.log('Dashboard - Profile loaded successfully:', profileData);
+            setRemainingLeaves(profileData.allowed_leave_days || 0);
 
-            // Load company
-            if (profileData?.company_id) {
-                console.log('Dashboard - Fetching company:', profileData.company_id);
-                const { data: companyData, error: companyError } = await supabase
-                    .from('companies')
-                    .select('*')
-                    .eq('id', profileData.company_id)
-                    .single();
+            // 2. Load today's attendance & month stats
+            const today = new Date().toISOString().split('T')[0];
+            const firstDayOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
 
-                console.log('Dashboard - Company query result:', { companyData, companyError });
+            const { data: attendanceLogs } = await supabase
+                .from('attendance_logs')
+                .select('check_in_time, date')
+                .eq('employee_id', user.id)
+                .gte('date', firstDayOfMonth);
 
-                if (companyError) {
-                    console.error('Dashboard - Company error:', companyError);
-                    // Don't fail completely if company fetch fails
-                    setError(`Company error: ${companyError.message}`);
-                } else {
-                    setCompany(companyData);
-                    console.log('Dashboard - Company loaded successfully:', companyData);
-                }
+            const todayLog = attendanceLogs?.find(l => l.date === today);
+            if (todayLog?.check_in_time) {
+                const time = new Date(todayLog.check_in_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                setCheckInTime(time);
+                setIsCheckedIn(true);
+            } else {
+                setCheckInTime('--:--');
+                setIsCheckedIn(false);
             }
-        } catch (error: any) {
-            console.error('Dashboard - Unexpected error:', error);
-            setError(`Unexpected error: ${error.message}`);
+
+            const monthDays = attendanceLogs?.length || 0;
+            setDaysPresent(monthDays);
+
+            // Calculate attendance rate (mocking total working days for now as ~22 per month)
+            const rate = Math.min(100, Math.round((monthDays / 22) * 100));
+            setAttendanceRate(rate);
+
+            // 3. Load unread messages (simulated as active channels for now)
+            const { count } = await supabase
+                .from('chat_channels')
+                .select('*', { count: 'exact', head: true });
+            setUnreadMessages(count || 0);
+
+            // 4. Load latest published payslip
+            const { data: payslip } = await supabase
+                .from('payroll_records')
+                .select('month')
+                .eq('employee_id', user.id)
+                .eq('status', 'published')
+                .order('month', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+            if (payslip?.month) {
+                const monthName = new Date(payslip.month).toLocaleDateString('default', { month: 'short' });
+                setLatestPayslip(monthName);
+            }
+
+        } catch (err: any) {
+            console.error('Error loading dashboard data:', err);
+            setError(err.message);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
-    }
+    }, [user]);
+
+    useEffect(() => {
+        loadDashboardData();
+    }, [loadDashboardData]);
+
+    const onRefresh = () => {
+        setRefreshing(true);
+        loadDashboardData();
+    };
 
     if (loading) {
         return (
             <View style={styles.centerContainer}>
-                <Text style={styles.loadingText}>Loading dashboard...</Text>
-                <Text style={styles.hintText}>Check console for details</Text>
+                <ActivityIndicator size="large" color={THEME.colors.primary} />
+                <Text style={styles.loadingText}>Loading Nexus...</Text>
             </View>
         );
     }
@@ -112,292 +134,232 @@ export default function Dashboard() {
     if (error || !profile) {
         return (
             <View style={styles.centerContainer}>
-                <View style={styles.errorContainer}>
-                    <Text style={styles.errorTitle}>⚠️ Error Loading Dashboard</Text>
+                <ModernCard style={styles.errorCard}>
+                    <Ionicons name="alert-circle" size={48} color={THEME.colors.error} />
+                    <Text style={styles.errorTitle}>Error Loading Dashboard</Text>
                     <Text style={styles.errorText}>{error || 'Profile not found'}</Text>
-                    <Text style={styles.errorHint}>
-                        Possible causes:
-                    </Text>
-                    <Text style={styles.errorDetail}>• Profile not created in database</Text>
-                    <Text style={styles.errorDetail}>• RLS policies blocking access</Text>
-                    <Text style={styles.errorDetail}>• User ID mismatch</Text>
-                    <Text style={styles.errorHint}>
-                        User ID: {user?.id}
-                    </Text>
-                    <Text style={styles.errorHint}>
-                        Email: {user?.email}
-                    </Text>
-                    <View style={styles.buttonSpacing}>
-                        <Button title="Retry" onPress={loadUserData} />
-                    </View>
-                    <Button title="Sign Out" onPress={signOut} color="#f44336" />
-                </View>
+                    <TouchableOpacity style={styles.retryBtn} onPress={loadDashboardData}>
+                        <Text style={styles.retryBtnText}>Retry</Text>
+                    </TouchableOpacity>
+                </ModernCard>
             </View>
         );
     }
-
-    console.log('Dashboard - Rendering with profile:', profile);
-    console.log('Dashboard - Role:', profile.role);
 
     const isAdmin = profile.role === 'admin' || profile.role === 'ceo';
     const isManager = profile.role === 'manager';
     const isHR = profile.role === 'hr';
     const isFinance = profile.role === 'finance';
 
-    console.log('Dashboard - Permissions:', { isAdmin, isManager, isHR, isFinance });
-
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.header}>
-                <Text style={styles.title}>Welcome to Nexus</Text>
-                <Text style={styles.subtitle}>{company?.name || 'Loading company...'}</Text>
-            </View>
-
-            <View style={styles.profileCard}>
-                <Text style={styles.profileName}>
-                    {profile.first_name} {profile.last_name}
-                </Text>
-                <Text style={styles.profileEmail}>{profile.email}</Text>
-                <View style={styles.roleBadge}>
-                    <Text style={styles.roleText}>{profile.role.toUpperCase()}</Text>
-                </View>
-            </View>
-
-            <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Quick Actions</Text>
-
-                {/* Employee Actions */}
-                <View style={styles.actionCard}>
-                    <Text style={styles.actionTitle}>📍 Check In</Text>
-                    <Text style={styles.actionDescription}>Record your attendance</Text>
-                    <Button title="Check In Now" onPress={() => router.push('/(app)/check-in')} />
-                </View>
-
-                <View style={styles.actionCard}>
-                    <Text style={styles.actionTitle}>🏖️ Request Leave</Text>
-                    <Text style={styles.actionDescription}>Submit a leave request</Text>
-                    <Button title="Request Leave" onPress={() => router.push('/(app)/leave')} />
-                </View>
-
-                {/* Admin/HR Attendance Overview */}
-                {(isAdmin || isHR) && (
-                    <View style={styles.actionCard}>
-                        <Text style={styles.actionTitle}>📊 Attendance Overview</Text>
-                        <Text style={styles.actionDescription}>View who is present/absent today</Text>
-                        <Button title="View Report" onPress={() => router.push('/(app)/attendance-report')} />
+        <SafeAreaView style={{ flex: 1, backgroundColor: THEME.colors.background }}>
+            <StatusBar barStyle="dark-content" />
+            <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
+                {/* Header Section */}
+                <View style={styles.header}>
+                    <View>
+                        <Text style={styles.greeting}>{profile.company?.name || 'Nexus'}</Text>
+                        <Text style={styles.nameLabel}>{profile.first_name} {profile.last_name}</Text>
+                        <Text style={styles.roleLabel}>{profile.role.toUpperCase()}</Text>
                     </View>
-                )}
-
-                <View style={styles.actionCard}>
-                    <Text style={styles.actionTitle}>💰 View Payslips</Text>
-                    <Text style={styles.actionDescription}>Download your payslips</Text>
-                    <Button title="View Payslips" onPress={() => router.push('/(app)/payslips')} />
+                    <TouchableOpacity
+                        style={styles.profileIndicator}
+                        onPress={() => router.push('/(app)/profile')}
+                    >
+                        <View style={styles.avatar}>
+                            <Text style={styles.avatarText}>{profile.first_name[0]}{profile.last_name[0]}</Text>
+                        </View>
+                    </TouchableOpacity>
                 </View>
 
-                <View style={styles.actionCard}>
-                    <Text style={styles.actionTitle}>💬 Messages</Text>
-                    <Text style={styles.actionDescription}>Chat with your team or leadership</Text>
-                    <Button title="Open Chat" onPress={() => router.push('/(app)/chat')} />
+                {/* Main Goal Ring */}
+                <ModernCard style={styles.goalCard}>
+                    <View style={styles.goalHeader}>
+                        <Text style={styles.goalTitle}>Work Summary</Text>
+                        <TouchableOpacity onPress={signOut}>
+                            <Ionicons name="log-out-outline" size={20} color={THEME.colors.text.secondary} />
+                        </TouchableOpacity>
+                    </View>
+
+                    <View style={styles.summaryContainer}>
+                        <View style={styles.summaryItem}>
+                            <View style={[styles.summaryIcon, { backgroundColor: isCheckedIn ? THEME.colors.primary + '15' : THEME.colors.error + '10' }]}>
+                                <Ionicons name="time" size={24} color={isCheckedIn ? THEME.colors.primary : THEME.colors.error} />
+                            </View>
+                            <View>
+                                <Text style={[styles.summaryValue, !isCheckedIn && { color: THEME.colors.error, fontSize: 13 }]}>
+                                    {isCheckedIn ? checkInTime : 'NOT SIGNED IN'}
+                                </Text>
+                                <Text style={styles.summaryLabel}>Today's In</Text>
+                            </View>
+                        </View>
+                        <View style={styles.summaryItem}>
+                            <View style={[styles.summaryIcon, { backgroundColor: THEME.colors.success + '15' }]}>
+                                <Ionicons name="calendar-check" size={24} color={THEME.colors.success} />
+                            </View>
+                            <View>
+                                <Text style={styles.summaryValue}>{daysPresent}</Text>
+                                <Text style={styles.summaryLabel}>Days Present</Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.goalStats}>
+                        <View style={styles.goalStatItem}>
+                            <Text style={styles.goalStatLabel}>Attendance</Text>
+                            <Text style={styles.goalStatValue}>{attendanceRate}%</Text>
+                        </View>
+                        <View style={styles.goalStatDivider} />
+                        <View style={styles.goalStatItem}>
+                            <Text style={styles.goalStatLabel}>Leaves</Text>
+                            <Text style={styles.goalStatValue}>{remainingLeaves} Days</Text>
+                        </View>
+                    </View>
+                </ModernCard>
+
+                {/* Activity Grid */}
+                <Text style={styles.sectionTitle}>Quick Access</Text>
+                <View style={styles.activityGrid}>
+                    <ActivityCard
+                        title="Check In"
+                        value={checkInTime}
+                        unit="Today"
+                        icon="location"
+                        color={THEME.colors.primary}
+                        onPress={() => router.push('/(app)/check-in')}
+                    />
+                    <ActivityCard
+                        title="Messages"
+                        value={unreadMessages.toString()}
+                        unit="New"
+                        icon="chatbubbles"
+                        color={THEME.colors.info}
+                        onPress={() => router.push('/(app)/chat')}
+                    />
+                    <ActivityCard
+                        title="Leaves"
+                        value={remainingLeaves.toString()}
+                        unit="Days Left"
+                        icon="calendar"
+                        color={THEME.colors.warning}
+                        onPress={() => router.push('/(app)/leave')}
+                    />
+                    <ActivityCard
+                        title="Payslips"
+                        value={latestPayslip}
+                        unit="Latest"
+                        icon="cash"
+                        color={THEME.colors.success}
+                        onPress={() => router.push('/(app)/payslips')}
+                    />
                 </View>
 
-                {/* Manager/Admin Actions */}
+                {/* Management Section */}
                 {(isAdmin || isManager || isHR) && (
                     <>
                         <Text style={styles.sectionTitle}>Management</Text>
+                        <View style={styles.actionGrid}>
+                            {(isAdmin || isHR) && (
+                                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/employees')}>
+                                    <View style={[styles.actionIconBox, { backgroundColor: '#E3F2FD' }]}>
+                                        <Ionicons name="people" size={24} color="#2196F3" />
+                                    </View>
+                                    <Text style={styles.actionBtnText}>Employees</Text>
+                                </TouchableOpacity>
+                            )}
 
-                        {isAdmin && (
-                            <View style={styles.actionCard}>
-                                <Text style={styles.actionTitle}>👥 Manage Employees</Text>
-                                <Text style={styles.actionDescription}>Invite and manage team members</Text>
-                                <Button title="Manage Employees" onPress={() => router.push('/(app)/employees')} />
-                            </View>
-                        )}
+                            {(isAdmin || isHR) && (
+                                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/teams')}>
+                                    <View style={[styles.actionIconBox, { backgroundColor: '#F3E5F5' }]}>
+                                        <Ionicons name="business" size={24} color="#9C27B0" />
+                                    </View>
+                                    <Text style={styles.actionBtnText}>Teams</Text>
+                                </TouchableOpacity>
+                            )}
 
-                        {isAdmin && (
-                            <View style={styles.actionCard}>
-                                <Text style={styles.actionTitle}>⚙️ Company Settings</Text>
-                                <Text style={styles.actionDescription}>Set office location and radius</Text>
-                                <Button title="Settings" onPress={() => router.push('/(app)/settings')} />
-                            </View>
-                        )}
+                            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/approvals')}>
+                                <View style={[styles.actionIconBox, { backgroundColor: '#E8F5E9' }]}>
+                                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                                </View>
+                                <Text style={styles.actionBtnText}>Approvals</Text>
+                            </TouchableOpacity>
 
-                        {(isAdmin || isManager) && (
-                            <View style={styles.actionCard}>
-                                <Text style={styles.actionTitle}>🏢 Manage Departments</Text>
-                                <Text style={styles.actionDescription}>Create and organize departments</Text>
-                                <Button title="Manage Departments" onPress={() => router.push('/(app)/teams')} />
-                            </View>
-                        )}
+                            <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/attendance-report')}>
+                                <View style={[styles.actionIconBox, { backgroundColor: '#FFFDE7' }]}>
+                                    <Ionicons name="stats-chart" size={24} color="#FBC02D" />
+                                </View>
+                                <Text style={styles.actionBtnText}>Attendance</Text>
+                            </TouchableOpacity>
 
-                        {(isAdmin || isManager || isHR) && (
-                            <View style={styles.actionCard}>
-                                <Text style={styles.actionTitle}>✅ Approve Requests</Text>
-                                <Text style={styles.actionDescription}>Review pending leave requests</Text>
-                                <Button title="View Requests" onPress={() => router.push('/(app)/approvals')} />
-                            </View>
-                        )}
-                    </>
-                )}
-
-                {/* Finance Actions */}
-                {(isAdmin || isFinance) && (
-                    <>
-                        <Text style={styles.sectionTitle}>Finance</Text>
-                        <View style={styles.actionCard}>
-                            <Text style={styles.actionTitle}>💵 Manage Payroll</Text>
-                            <Text style={styles.actionDescription}>Process and publish payroll</Text>
-                            <Button title="Manage Payroll" onPress={() => router.push('/(app)/payroll')} />
+                            {(isAdmin || isHR) && (
+                                <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/settings')}>
+                                    <View style={[styles.actionIconBox, { backgroundColor: '#FFF3E0' }]}>
+                                        <Ionicons name="settings" size={24} color="#FF9800" />
+                                    </View>
+                                    <Text style={styles.actionBtnText}>Settings</Text>
+                                </TouchableOpacity>
+                            )}
                         </View>
                     </>
                 )}
-            </View>
 
-            <View style={styles.footer}>
-                <Button title="Sign Out" onPress={signOut} color="#f44336" />
-            </View>
-        </ScrollView>
+                {/* Finance Section */}
+                {(isAdmin || isFinance) && (
+                    <ModernCard style={styles.financeCard}>
+                        <View style={styles.financeHeader}>
+                            <Ionicons name="wallet-outline" size={24} color={THEME.colors.primary} />
+                            <Text style={styles.financeTitle}>Payroll Management</Text>
+                        </View>
+                        <TouchableOpacity style={styles.financeBtn} onPress={() => router.push('/(app)/payroll')}>
+                            <Text style={styles.financeBtnText}>Manage Payroll</Text>
+                            <Ionicons name="arrow-forward" size={18} color="white" />
+                        </TouchableOpacity>
+                    </ModernCard>
+                )}
+            </ScrollView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    centerContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
-        backgroundColor: '#f5f5f5',
-    },
-    loadingText: {
-        fontSize: 18,
-        marginBottom: 8,
-    },
-    hintText: {
-        fontSize: 14,
-        color: '#666',
-    },
-    errorContainer: {
-        backgroundColor: 'white',
-        padding: 24,
-        borderRadius: 12,
-        maxWidth: 400,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    errorTitle: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 12,
-        color: '#f44336',
-    },
-    errorText: {
-        fontSize: 16,
-        marginBottom: 16,
-        color: '#333',
-    },
-    errorHint: {
-        fontSize: 14,
-        fontWeight: '600',
-        marginTop: 12,
-        marginBottom: 4,
-        color: '#666',
-    },
-    errorDetail: {
-        fontSize: 13,
-        marginLeft: 8,
-        marginBottom: 2,
-        color: '#666',
-    },
-    buttonSpacing: {
-        marginTop: 16,
-        marginBottom: 8,
-    },
-    header: {
-        backgroundColor: '#2196f3',
-        padding: 20,
-        paddingTop: 60,
-    },
-    title: {
-        fontSize: 28,
-        fontWeight: 'bold',
-        color: 'white',
-    },
-    subtitle: {
-        fontSize: 16,
-        color: 'rgba(255,255,255,0.9)',
-        marginTop: 4,
-    },
-    profileCard: {
-        backgroundColor: 'white',
-        margin: 16,
-        padding: 20,
-        borderRadius: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 4,
-        elevation: 3,
-    },
-    profileName: {
-        fontSize: 20,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    profileEmail: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 12,
-    },
-    roleBadge: {
-        backgroundColor: '#e3f2fd',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
-        borderRadius: 16,
-        alignSelf: 'flex-start',
-    },
-    roleText: {
-        color: '#1976d2',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    section: {
-        padding: 16,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-        marginTop: 8,
-    },
-    actionCard: {
-        backgroundColor: 'white',
-        padding: 16,
-        borderRadius: 8,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    actionTitle: {
-        fontSize: 16,
-        fontWeight: '600',
-        marginBottom: 4,
-    },
-    actionDescription: {
-        fontSize: 14,
-        color: '#666',
-        marginBottom: 12,
-    },
-    footer: {
-        padding: 16,
-        paddingBottom: 32,
-    },
+    container: { flex: 1 },
+    contentContainer: { padding: THEME.spacing.lg },
+    centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: THEME.colors.background },
+    loadingText: { marginTop: 16, fontSize: 16, color: THEME.colors.text.secondary, fontWeight: '500' },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: THEME.spacing.xl },
+    greeting: { fontSize: 16, color: THEME.colors.text.secondary, fontWeight: '500' },
+    nameLabel: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary, marginTop: 4 },
+    profileIndicator: { width: 48, height: 48, borderRadius: 24, padding: 2, borderWidth: 2, borderColor: THEME.colors.primary },
+    avatar: { flex: 1, backgroundColor: THEME.colors.primary, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+    avatarText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
+    sectionTitle: { fontSize: 20, fontWeight: 'bold', color: THEME.colors.text.primary, marginBottom: THEME.spacing.md, marginTop: THEME.spacing.sm },
+    activityGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+    actionGrid: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: THEME.spacing.xl },
+    actionBtn: { alignItems: 'center', width: '22%' },
+    actionIconBox: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    actionBtnText: { fontSize: 11, fontWeight: '600', color: THEME.colors.text.secondary },
+    financeCard: { padding: THEME.spacing.lg, marginBottom: THEME.spacing.xl, backgroundColor: '#F8F7FF', borderColor: THEME.colors.primary + '10', borderWidth: 1 },
+    financeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: THEME.spacing.lg },
+    financeTitle: { fontSize: 16, fontWeight: '700', color: THEME.colors.text.primary, marginLeft: 12 },
+    financeBtn: { backgroundColor: THEME.colors.primary, padding: 16, borderRadius: 16, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
+    financeBtnText: { color: 'white', fontWeight: 'bold', marginRight: 8, fontSize: 16 },
+    errorCard: { padding: THEME.spacing.xl, alignItems: 'center' },
+    errorTitle: { fontSize: 20, fontWeight: 'bold', color: THEME.colors.text.primary, marginTop: 16 },
+    errorText: { fontSize: 14, color: THEME.colors.text.secondary, textAlign: 'center', marginVertical: 16 },
+    retryBtn: { backgroundColor: THEME.colors.primary, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12 },
+    retryBtnText: { color: 'white', fontWeight: 'bold' },
+    goalCard: { padding: THEME.spacing.lg, marginBottom: THEME.spacing.xl },
+    goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 20 },
+    goalTitle: { fontSize: 18, fontWeight: '700', color: THEME.colors.text.primary },
+    summaryContainer: { gap: 16, marginVertical: 8 },
+    summaryItem: { flexDirection: 'row', alignItems: 'center', gap: 16, backgroundColor: '#f8f9fa', padding: 12, borderRadius: 16 },
+    summaryIcon: { width: 44, height: 44, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    summaryValue: { fontSize: 18, fontWeight: 'bold', color: THEME.colors.text.primary },
+    summaryLabel: { fontSize: 12, color: THEME.colors.text.muted },
+    goalStats: { flexDirection: 'row', alignItems: 'center', marginTop: 24, width: '100%', paddingHorizontal: 4 },
+    goalStatItem: { flex: 1, alignItems: 'center' },
+    goalStatLabel: { fontSize: 12, color: THEME.colors.text.muted, marginBottom: 4 },
+    goalStatValue: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
+    goalStatDivider: { width: 1, height: 30, backgroundColor: '#eee' },
+    roleLabel: { fontSize: 12, color: THEME.colors.primary, fontWeight: 'bold', marginTop: 4, letterSpacing: 0.5 }
 });

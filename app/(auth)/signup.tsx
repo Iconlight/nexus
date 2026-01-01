@@ -1,7 +1,10 @@
-import { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert, ScrollView, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, StyleSheet, Alert, ScrollView, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
+import { THEME } from '../../src/constants/Theme';
+import { Ionicons } from '@expo/vector-icons';
+import { ModernCard } from '../../src/components/ModernCard';
 
 export default function CompanySignup() {
     const [companyName, setCompanyName] = useState('');
@@ -15,10 +18,7 @@ export default function CompanySignup() {
     const [statusMessage, setStatusMessage] = useState('');
     const router = useRouter();
 
-    // Custom alert that works on web
     const showAlert = (title: string, message: string, onOk?: () => void) => {
-        setStatusMessage(`${title}: ${message}`);
-
         if (Platform.OS === 'web') {
             alert(`${title}\n\n${message}`);
             if (onOk) onOk();
@@ -28,28 +28,13 @@ export default function CompanySignup() {
     };
 
     async function handleSignup() {
-        setStatusMessage('');
-
-        // Validation
         if (!companyName || !firstName || !lastName || !email || !password) {
             showAlert('Error', 'Please fill in all required fields');
             return;
         }
 
-        // Email validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-        if (!emailRegex.test(email)) {
-            showAlert('Error', 'Please enter a valid email address');
-            return;
-        }
-
         if (password !== confirmPassword) {
             showAlert('Error', 'Passwords do not match');
-            return;
-        }
-
-        if (password.length < 8) {
-            showAlert('Error', 'Password must be at least 8 characters');
             return;
         }
 
@@ -60,16 +45,11 @@ export default function CompanySignup() {
             const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
             const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-            console.log('Supabase URL:', supabaseUrl);
-            console.log('Has Anon Key:', !!supabaseKey);
-
             if (!supabaseUrl || !supabaseKey) {
-                throw new Error('Supabase configuration missing. Please check your .env file.');
+                throw new Error('Supabase configuration missing.');
             }
 
             const url = `${supabaseUrl}/functions/v1/company-signup`;
-            console.log('Calling Edge Function:', url);
-
             const requestBody = {
                 companyName,
                 adminEmail: email,
@@ -79,9 +59,6 @@ export default function CompanySignup() {
                 adminPhone: phone,
             };
 
-            console.log('Request body:', { ...requestBody, adminPassword: '***' });
-
-            // Call the Supabase Edge Function
             const response = await fetch(url, {
                 method: 'POST',
                 headers: {
@@ -91,200 +68,268 @@ export default function CompanySignup() {
                 body: JSON.stringify(requestBody),
             });
 
-            console.log('Response status:', response.status);
-            console.log('Response headers:', response.headers);
-
             const responseText = await response.text();
-            console.log('Response text:', responseText);
-
             let data;
             try {
                 data = JSON.parse(responseText);
             } catch (e) {
-                throw new Error(`Invalid response from server: ${responseText}`);
+                throw new Error('Server response error');
             }
 
             if (!response.ok) {
-                throw new Error(data.error || `Server error: ${response.status}`);
+                throw new Error(data.error || 'Server error');
             }
 
-            console.log('Success:', data);
-            setStatusMessage('Account created! Logging you in...');
-
-            // Auto-login the user
-            const { error: signInError } = await supabase.auth.signInWithPassword({
-                email,
-                password,
-            });
-
-            if (signInError) {
-                console.error('Auto-login failed:', signInError);
-                showAlert(
-                    'Success',
-                    'Account created successfully! Please log in with your credentials.',
-                    () => router.replace('/(auth)/login')
-                );
-            } else {
-                console.log('Auto-login successful');
-                setStatusMessage('Success! Redirecting to dashboard...');
-                // The AuthContext will handle the redirect to dashboard
-                setTimeout(() => {
-                    router.replace('/(app)/dashboard');
-                }, 500);
-            }
+            // Auto-login
+            await supabase.auth.signInWithPassword({ email, password });
+            router.replace('/(app)/dashboard');
 
         } catch (error: any) {
-            console.error('Signup error:', error);
-            showAlert('Error', error.message || 'Failed to create account');
+            showAlert('Error', error.message || 'Signup failed');
         } finally {
             setLoading(false);
         }
     }
 
     return (
-        <ScrollView style={styles.container}>
-            <View style={styles.content}>
-                <Text style={styles.title}>Create Company Account</Text>
-                <Text style={styles.subtitle}>Set up your organization</Text>
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ flex: 1 }}
+            >
+                <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+                    <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
+                        <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+                    </TouchableOpacity>
 
-                {statusMessage ? (
-                    <View style={styles.statusContainer}>
-                        <Text style={styles.statusText}>{statusMessage}</Text>
+                    <View style={styles.header}>
+                        <Text style={styles.title}>Create Company</Text>
+                        <Text style={styles.subtitle}>Set up your organization on Nexus</Text>
                     </View>
-                ) : null}
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Company Information</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Company Name *"
-                        value={companyName}
-                        onChangeText={setCompanyName}
-                    />
-                </View>
+                    <ModernCard style={styles.formCard}>
+                        <Text style={styles.sectionTitle}>ORGANIZATION DETAILS</Text>
+                        <View style={styles.inputGroup}>
+                            <View style={styles.inputWrapper}>
+                                <Ionicons name="business-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Company Name"
+                                    value={companyName}
+                                    onChangeText={setCompanyName}
+                                    placeholderTextColor={THEME.colors.text.muted}
+                                />
+                            </View>
+                        </View>
 
-                <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Admin Information</Text>
-                    <TextInput
-                        style={styles.input}
-                        placeholder="First Name *"
-                        value={firstName}
-                        onChangeText={setFirstName}
-                    />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Last Name *"
-                        value={lastName}
-                        onChangeText={setLastName}
-                    />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Email *"
-                        value={email}
-                        onChangeText={setEmail}
-                        keyboardType="email-address"
-                        autoCapitalize="none"
-                    />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Phone (optional)"
-                        value={phone}
-                        onChangeText={setPhone}
-                        keyboardType="phone-pad"
-                    />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Password *"
-                        value={password}
-                        onChangeText={setPassword}
-                        secureTextEntry
-                        autoCapitalize="none"
-                    />
-                    <TextInput
-                        style={styles.input}
-                        placeholder="Confirm Password *"
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        secureTextEntry
-                        autoCapitalize="none"
-                    />
-                </View>
+                        <Text style={[styles.sectionTitle, { marginTop: 24 }]}>ADMINISTRATOR DETAILS</Text>
+                        <View style={styles.row}>
+                            <View style={[styles.inputGroup, { flex: 1 }]}>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="First Name"
+                                        value={firstName}
+                                        onChangeText={setFirstName}
+                                        placeholderTextColor={THEME.colors.text.muted}
+                                    />
+                                </View>
+                            </View>
+                            <View style={[styles.inputGroup, { flex: 1 }]}>
+                                <View style={styles.inputWrapper}>
+                                    <TextInput
+                                        style={styles.input}
+                                        placeholder="Last Name"
+                                        value={lastName}
+                                        onChangeText={setLastName}
+                                        placeholderTextColor={THEME.colors.text.muted}
+                                    />
+                                </View>
+                            </View>
+                        </View>
 
-                <Button
-                    title={loading ? 'Creating Account...' : 'Create Company Account'}
-                    onPress={handleSignup}
-                    disabled={loading}
-                />
+                        <View style={styles.inputGroup}>
+                            <View style={styles.inputWrapper}>
+                                <Ionicons name="mail-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Admin Email"
+                                    value={email}
+                                    onChangeText={setEmail}
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                    placeholderTextColor={THEME.colors.text.muted}
+                                />
+                            </View>
+                        </View>
 
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>Already have an account?</Text>
-                    <Button
-                        title="Sign In"
-                        onPress={() => router.push('/(auth)/login')}
-                    />
-                </View>
-            </View>
-        </ScrollView>
+                        <View style={styles.inputGroup}>
+                            <View style={styles.inputWrapper}>
+                                <Ionicons name="lock-closed-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Password"
+                                    value={password}
+                                    onChangeText={setPassword}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    placeholderTextColor={THEME.colors.text.muted}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={styles.inputGroup}>
+                            <View style={styles.inputWrapper}>
+                                <Ionicons name="shield-checkmark-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Confirm Password"
+                                    value={confirmPassword}
+                                    onChangeText={setConfirmPassword}
+                                    secureTextEntry
+                                    autoCapitalize="none"
+                                    placeholderTextColor={THEME.colors.text.muted}
+                                />
+                            </View>
+                        </View>
+
+                        <TouchableOpacity
+                            style={[styles.signupBtn, loading && styles.btnDisabled]}
+                            onPress={handleSignup}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="white" />
+                            ) : (
+                                <>
+                                    <Text style={styles.signupText}>Create Account</Text>
+                                    <Ionicons name="rocket-outline" size={18} color="white" />
+                                </>
+                            )}
+                        </TouchableOpacity>
+                    </ModernCard>
+
+                    <View style={styles.footer}>
+                        <Text style={styles.footerText}>Already have an account?</Text>
+                        <TouchableOpacity onPress={() => router.push('/(auth)/login')}>
+                            <Text style={styles.loginLink}>Sign In</Text>
+                        </TouchableOpacity>
+                    </View>
+                    <View style={{ height: 40 }} />
+                </ScrollView>
+            </KeyboardAvoidingView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: '#F8FAFC',
     },
-    content: {
-        padding: 20,
+    scrollContent: {
+        padding: 24,
+    },
+    backBtn: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        backgroundColor: 'white',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 32,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 4,
+        elevation: 2,
+    },
+    header: {
+        marginBottom: 32,
     },
     title: {
         fontSize: 28,
         fontWeight: 'bold',
+        color: THEME.colors.text.primary,
         marginBottom: 8,
-        textAlign: 'center',
     },
     subtitle: {
-        fontSize: 16,
-        color: '#666',
-        marginBottom: 30,
-        textAlign: 'center',
+        fontSize: 15,
+        color: THEME.colors.text.muted,
     },
-    section: {
-        marginBottom: 20,
+    formCard: {
+        padding: 24,
     },
     sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-        color: '#333',
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: THEME.colors.text.muted,
+        marginBottom: 16,
+        letterSpacing: 1,
+    },
+    inputGroup: {
+        marginBottom: 16,
+    },
+    row: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    inputWrapper: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F1F5F9',
+        borderRadius: 16,
+        paddingHorizontal: 16,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+    },
+    inputIcon: {
+        marginRight: 12,
     },
     input: {
-        backgroundColor: 'white',
-        padding: 12,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: '#ddd',
-        marginBottom: 12,
+        flex: 1,
+        paddingVertical: 14,
+        fontSize: 15,
+        color: THEME.colors.text.primary,
+    },
+    signupBtn: {
+        backgroundColor: THEME.colors.primary,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 18,
+        borderRadius: 16,
+        marginTop: 16,
+        gap: 10,
+        shadowColor: THEME.colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    btnDisabled: {
+        opacity: 0.7,
+    },
+    signupText: {
+        color: 'white',
+        fontWeight: 'bold',
         fontSize: 16,
     },
     footer: {
-        marginTop: 30,
+        marginTop: 32,
+        flexDirection: 'row',
+        justifyContent: 'center',
         alignItems: 'center',
+        gap: 8,
     },
     footerText: {
-        marginBottom: 10,
-        color: '#666',
-    },
-    statusContainer: {
-        backgroundColor: '#e3f2fd',
-        padding: 12,
-        borderRadius: 8,
-        marginBottom: 20,
-        borderLeftWidth: 4,
-        borderLeftColor: '#2196f3',
-    },
-    statusText: {
-        color: '#1976d2',
+        color: THEME.colors.text.muted,
         fontSize: 14,
-        fontWeight: '500',
+    },
+    loginLink: {
+        color: THEME.colors.primary,
+        fontWeight: 'bold',
+        fontSize: 15,
     },
 });

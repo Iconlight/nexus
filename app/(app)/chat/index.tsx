@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../../src/services/supabase';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../src/context/AuthContext';
+import { THEME } from '../../../src/constants/Theme';
+import { ModernCard } from '../../../src/components/ModernCard';
 
 type Channel = {
     id: string;
@@ -30,56 +32,30 @@ export default function ChatList() {
     async function fetchChannels() {
         if (!user) return;
         try {
-            // 1. Fetch current user role
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single();
-
+            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
             const myRole = profile?.role;
 
-            // 2. Fetch existing channels
             const { data: existing, error } = await supabase
                 .from('chat_channels')
-                .select(`
-                    *,
-                    profiles_a:participant_a(first_name, last_name),
-                    profiles_b:participant_b(first_name, last_name)
-                `)
+                .select('*, profiles_a:participant_a(first_name, last_name), profiles_b:participant_b(first_name, last_name)')
                 .order('created_at', { ascending: false });
 
             if (error) throw error;
 
-            // 3. Fetch potential partners
-            // Admins can message Managers. Managers can message Admins.
             let potentialPartners: any[] = [];
             if (myRole === 'admin' || myRole === 'ceo' || myRole === 'hr') {
-                // Fetch all managers
-                const { data: managers } = await supabase
-                    .from('profiles')
-                    .select('id, first_name, last_name, role')
-                    .eq('role', 'manager')
-                    .eq('is_active', true);
+                const { data: managers } = await supabase.from('profiles').select('id, first_name, last_name, role').eq('role', 'manager').eq('is_active', true);
                 potentialPartners = managers || [];
             } else if (myRole === 'manager') {
-                // Fetch all admins
-                const { data: admins } = await supabase
-                    .from('profiles')
-                    .select('id, first_name, last_name, role')
-                    .in('role', ['admin', 'ceo', 'hr'])
-                    .eq('is_active', true);
+                const { data: admins } = await supabase.from('profiles').select('id, first_name, last_name, role').in('role', ['admin', 'ceo', 'hr']).eq('is_active', true);
                 potentialPartners = admins || [];
             }
 
-            // 4. Merge
             const activeIds = new Set();
             const results: Channel[] = [];
-
             existing?.forEach(ch => {
                 if (ch.type === 'dm') {
                     const partnerId = ch.participant_a === user.id ? ch.participant_b : ch.participant_a;
-                    // Only add if it's not a self-DM
                     if (partnerId && partnerId !== user.id) {
                         activeIds.add(partnerId);
                         results.push(ch);
@@ -90,7 +66,6 @@ export default function ChatList() {
             });
 
             potentialPartners.forEach(p => {
-                // Triple check: not in active DMs and not the current user
                 if (!activeIds.has(p.id) && p.id !== user.id) {
                     results.push({
                         id: `p-${p.id}`,
@@ -112,62 +87,63 @@ export default function ChatList() {
 
     const renderItem = ({ item }: { item: Channel }) => {
         let displayName = item.name;
-        let subText = item.type === 'department' ? 'Team Chat' : 'Leadership Support';
-        let iconName: any = item.type === 'department' ? 'people' : 'shield-checkmark';
-        let iconColor = item.type === 'department' ? '#2196f3' : '#e91e63';
+        let subText = item.type === 'department' ? 'Department Team' : 'Leadership Group';
+        let iconName: any = item.type === 'department' ? 'people' : 'ribbon';
+        let iconColor = item.type === 'department' ? THEME.colors.primary : THEME.colors.warning;
 
         if (item.type === 'dm') {
             if (item.isPotential) {
                 displayName = item.name;
                 subText = 'Start a conversation';
                 iconName = 'chatbubble-outline';
-                iconColor = '#999';
+                iconColor = THEME.colors.text.muted;
             } else {
                 const isA = item.participant_a === user?.id;
                 const partner = isA ? item.profiles_b : item.profiles_a;
                 displayName = partner ? `${partner.first_name} ${partner.last_name}` : 'Direct Message';
-                subText = 'Private Message';
-                iconName = 'person';
-                iconColor = '#4caf50';
+                subText = 'Private DM';
+                iconName = 'chatbox-ellipses';
+                iconColor = THEME.colors.info;
             }
         }
 
         return (
             <TouchableOpacity
-                style={styles.card}
-                onPress={() => {
-                    if (item.isPotential) {
-                        router.push(`/(app)/chat/new?partnerId=${item.partner_id}`);
-                    } else {
-                        router.push(`/(app)/chat/${item.id}`);
-                    }
-                }}
+                onPress={() => item.isPotential ? router.push(`/(app)/chat/new?partnerId=${item.partner_id}`) : router.push(`/(app)/chat/${item.id}`)}
+                activeOpacity={0.7}
             >
-                <View style={[styles.iconBox, { backgroundColor: `${iconColor}15` }]}>
-                    <Ionicons name={iconName} size={24} color={iconColor} />
-                </View>
-                <View style={styles.textBox}>
-                    <Text style={styles.name}>{displayName}</Text>
-                    <Text style={styles.type}>{subText}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color="#ccc" />
+                <ModernCard style={styles.card}>
+                    <View style={[styles.iconBox, { backgroundColor: `${iconColor}15` }]}>
+                        <Ionicons name={iconName} size={24} color={iconColor} />
+                    </View>
+                    <View style={styles.textBox}>
+                        <Text style={styles.name}>{displayName}</Text>
+                        <Text style={styles.type}>{subText}</Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={20} color={THEME.colors.text.muted} />
+                </ModernCard>
             </TouchableOpacity>
         );
     };
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
             <View style={styles.header}>
-                <Text style={styles.headerTitle}>Messages</Text>
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+                </TouchableOpacity>
             </View>
 
             {loading ? (
                 <View style={styles.center}>
-                    <ActivityIndicator size="large" color="#2196f3" />
+                    <ActivityIndicator size="large" color={THEME.colors.primary} />
                 </View>
             ) : channels.length === 0 ? (
                 <View style={styles.center}>
-                    <Text style={styles.emptyText}>No active chats found.</Text>
+                    <Ionicons name="chatbubbles-outline" size={64} color={THEME.colors.text.muted} />
+                    <Text style={styles.emptyText}>No active conversations</Text>
+                    <Text style={styles.emptySub}>Start a chat with your team or leadshership</Text>
                 </View>
             ) : (
                 <FlatList
@@ -177,20 +153,23 @@ export default function ChatList() {
                     contentContainerStyle={styles.list}
                 />
             )}
-        </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#f8f9fa' },
-    header: { padding: 20, paddingTop: 60, backgroundColor: 'white', borderBottomWidth: 1, borderColor: '#eee' },
-    headerTitle: { fontSize: 28, fontWeight: 'bold' },
-    list: { padding: 16 },
-    card: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', padding: 16, borderRadius: 16, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
-    iconBox: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+    container: { flex: 1, backgroundColor: THEME.colors.background },
+    header: { padding: THEME.spacing.lg, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border, flexDirection: 'row', alignItems: 'center' },
+    backBtn: { padding: 8, marginLeft: -8 },
+    headerTitle: { fontSize: 28, fontWeight: 'bold', color: THEME.colors.text.primary },
+    list: { padding: THEME.spacing.lg },
+    card: { flexDirection: 'row', alignItems: 'center', padding: 16, marginBottom: 12 },
+    iconBox: { width: 52, height: 52, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
     textBox: { flex: 1 },
-    name: { fontSize: 16, fontWeight: '600', color: '#333' },
-    type: { fontSize: 13, color: '#888', marginTop: 2 },
+    name: { fontSize: 17, fontWeight: 'bold', color: THEME.colors.text.primary },
+    type: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 4 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    emptyText: { color: '#999', fontSize: 16 }
+    emptyText: { color: THEME.colors.text.primary, fontSize: 18, fontWeight: 'bold', marginTop: 16 },
+    emptySub: { color: THEME.colors.text.secondary, fontSize: 14, marginTop: 8, textAlign: 'center', paddingHorizontal: 40 }
 });
+

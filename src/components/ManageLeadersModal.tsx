@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TouchableOpacity, Button, FlatList, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, Alert, Platform, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../services/supabase';
+import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../constants/Theme';
+import { ModernCard } from './ModernCard';
 
 type Leader = {
     id: string; // profile_id
@@ -55,7 +58,6 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
         const candidate = eligibleManagers.find(e => e.id === managerId);
 
         if (candidate?.role === 'employee') {
-            // Web compatible confirm
             const confirmMsg = `Promote ${candidate.first_name} to Manager? They must be a manager to lead a department.`;
 
             if (Platform.OS === 'web') {
@@ -137,50 +139,78 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
         <Modal
             visible={visible}
             transparent={true}
-            animationType="slide"
+            animationType="fade"
             onRequestClose={onClose}
         >
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>Manage Leaders: {teamName}</Text>
-                        <Button title="Close" onPress={onClose} />
+                        <View>
+                            <Text style={styles.title}>Department Leaders</Text>
+                            <Text style={styles.subtitle}>{teamName}</Text>
+                        </View>
+                        <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
+                            <Ionicons name="close" size={24} color={THEME.colors.text.primary} />
+                        </TouchableOpacity>
                     </View>
 
-                    <Text style={styles.sectionTitle}>Current Leaders</Text>
-                    {currentLeaders.length === 0 ? (
-                        <Text style={styles.emptyText}>No leaders assigned</Text>
-                    ) : (
-                        <FlatList
-                            data={currentLeaders}
-                            keyExtractor={item => item.id}
-                            renderItem={({ item }) => (
-                                <View style={styles.userRow}>
-                                    <Text style={styles.userName}>{item.first_name} {item.last_name}</Text>
-                                    <Button title="Remove" color="#f44336" onPress={() => removeLeader(item.id)} disabled={loading} />
-                                </View>
-                            )}
-                        />
-                    )}
-
-                    <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Available Managers</Text>
-                    {availableManagers.length === 0 ? (
-                        <Text style={styles.emptyText}>No other managers available</Text>
-                    ) : (
-                        <FlatList
-                            data={availableManagers}
-                            keyExtractor={item => item.id}
-                            renderItem={({ item }) => (
-                                <View style={styles.userRow}>
-                                    <View>
+                    <ScrollView showsVerticalScrollIndicator={false}>
+                        <Text style={styles.sectionHeader}>ASSIGNED MANAGERS</Text>
+                        {currentLeaders.length === 0 ? (
+                            <View style={styles.emptyBox}>
+                                <Text style={styles.emptyText}>No leaders assigned</Text>
+                            </View>
+                        ) : (
+                            currentLeaders.map(item => (
+                                <ModernCard key={item.id} style={styles.userCard}>
+                                    <View style={styles.userInfo}>
+                                        <View style={styles.avatarMini}>
+                                            <Text style={styles.avatarTextMini}>{item.first_name[0]}</Text>
+                                        </View>
                                         <Text style={styles.userName}>{item.first_name} {item.last_name}</Text>
-                                        <Text style={styles.userRole}>{item.role}</Text>
                                     </View>
-                                    <Button title="Add" onPress={() => addLeader(item.id)} disabled={loading} />
-                                </View>
-                            )}
-                        />
-                    )}
+                                    <TouchableOpacity
+                                        style={styles.removeBtn}
+                                        onPress={() => removeLeader(item.id)}
+                                        disabled={loading}
+                                    >
+                                        <Ionicons name="trash-outline" size={18} color={THEME.colors.error} />
+                                    </TouchableOpacity>
+                                </ModernCard>
+                            ))
+                        )}
+
+                        <Text style={[styles.sectionHeader, { marginTop: 24 }]}>AVAILABLE TO ASSIGN</Text>
+                        {availableManagers.length === 0 ? (
+                            <View style={styles.emptyBox}>
+                                <Text style={styles.emptyText}>No other managers available</Text>
+                            </View>
+                        ) : (
+                            availableManagers.map(item => (
+                                <ModernCard key={item.id} style={styles.userCard}>
+                                    <View style={styles.userInfo}>
+                                        <View style={[styles.avatarMini, { backgroundColor: THEME.colors.info }]}>
+                                            <Text style={styles.avatarTextMini}>{item.first_name[0]}</Text>
+                                        </View>
+                                        <View>
+                                            <Text style={styles.userName}>{item.first_name} {item.last_name}</Text>
+                                            <Text style={styles.userRole}>{item.role.toUpperCase()}</Text>
+                                        </View>
+                                    </View>
+                                    <TouchableOpacity
+                                        style={styles.addBtn}
+                                        onPress={() => addLeader(item.id)}
+                                        disabled={loading}
+                                    >
+                                        <Ionicons name="add" size={20} color={THEME.colors.primary} />
+                                        <Text style={styles.addBtnText}>ADD</Text>
+                                    </TouchableOpacity>
+                                </ModernCard>
+                            ))
+                        )}
+                        {loading && <ActivityIndicator style={{ marginTop: 20 }} color={THEME.colors.primary} />}
+                        <View style={{ height: 20 }} />
+                    </ScrollView>
                 </View>
             </View>
         </Modal>
@@ -190,57 +220,116 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
 const styles = StyleSheet.create({
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
+        backgroundColor: 'rgba(0,0,0,0.6)',
         justifyContent: 'center',
         padding: 20,
     },
     modalContent: {
-        backgroundColor: 'white',
-        borderRadius: 12,
+        backgroundColor: THEME.colors.background,
+        borderRadius: 24,
         padding: 24,
-        maxHeight: '80%',
+        maxHeight: '85%',
+        elevation: 10,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
     },
     header: {
         flexDirection: 'row',
         justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 20,
+        alignItems: 'flex-start',
+        marginBottom: 24,
     },
     title: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: '#333',
-        flex: 1,
+        color: THEME.colors.text.primary,
     },
-    sectionTitle: {
-        fontSize: 16,
+    subtitle: {
+        fontSize: 14,
+        color: THEME.colors.primary,
         fontWeight: '600',
-        color: '#666',
+        marginTop: 2,
+    },
+    closeBtn: {
+        padding: 8,
+        backgroundColor: '#f5f5f5',
+        borderRadius: 12,
+    },
+    sectionHeader: {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: THEME.colors.text.muted,
         marginBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-        paddingBottom: 8,
+        letterSpacing: 1,
+    },
+    emptyBox: {
+        padding: 20,
+        alignItems: 'center',
+        backgroundColor: '#f8f9fa',
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: '#eee',
+        borderStyle: 'dashed',
     },
     emptyText: {
-        color: '#999',
+        color: THEME.colors.text.muted,
+        fontSize: 13,
         fontStyle: 'italic',
-        marginBottom: 12,
     },
-    userRow: {
+    userCard: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        paddingVertical: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
+        padding: 12,
+        marginBottom: 8,
+    },
+    userInfo: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    avatarMini: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: THEME.colors.primary,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    avatarTextMini: {
+        color: 'white',
+        fontSize: 14,
+        fontWeight: 'bold',
     },
     userName: {
-        fontSize: 16,
-        fontWeight: '500',
-        color: '#333',
+        fontSize: 14,
+        fontWeight: '600',
+        color: THEME.colors.text.primary,
     },
     userRole: {
-        fontSize: 12,
-        color: '#999',
+        fontSize: 10,
+        color: THEME.colors.text.muted,
+        marginTop: 1,
+    },
+    removeBtn: {
+        padding: 8,
+        backgroundColor: THEME.colors.error + '10',
+        borderRadius: 8,
+    },
+    addBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        backgroundColor: THEME.colors.primary + '10',
+        borderRadius: 8,
+        gap: 4,
+    },
+    addBtnText: {
+        fontSize: 11,
+        fontWeight: 'bold',
+        color: THEME.colors.primary,
     },
 });

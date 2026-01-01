@@ -1,9 +1,12 @@
-import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Platform, Alert, TextInput } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Platform, Alert, TextInput, SafeAreaView, StatusBar, ActivityIndicator } from 'react-native';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import EmployeeDetailModal from '../../src/components/EmployeeDetailModal';
+import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../../src/constants/Theme';
+import { ModernCard } from '../../src/components/ModernCard';
 
 type AttendanceRecord = {
     id: string;
@@ -60,7 +63,6 @@ export default function AttendanceReport() {
             setLoading(true);
             const today = new Date().toISOString().split('T')[0];
 
-            // 1. Get current user's profile to check company_id
             const { data: profile } = await supabase
                 .from('profiles')
                 .select('company_id, role')
@@ -69,18 +71,16 @@ export default function AttendanceReport() {
 
             if (!profile?.company_id) return;
 
-            // 2. Get all active employees for this company
             const { data: allEmployees, error: empError } = await supabase
                 .from('profiles')
                 .select('*')
                 .eq('company_id', profile.company_id)
                 .eq('is_active', true)
-                .neq('role', 'admin') // Optional: Exclude admins from attendance list
+                .neq('role', 'admin')
                 .neq('role', 'ceo');
 
             if (empError) throw empError;
 
-            // 3. Get today's attendance logs
             const { data: logs, error: logsError } = await supabase
                 .from('attendance_logs')
                 .select(`
@@ -101,7 +101,6 @@ export default function AttendanceReport() {
 
             if (logsError) throw logsError;
 
-            // Process data
             const checkedInList: AttendanceRecord[] = [];
             const completedList: AttendanceRecord[] = [];
             const presentEmployeeIds = new Set<string>();
@@ -115,7 +114,6 @@ export default function AttendanceReport() {
                 }
             });
 
-            // Find absent employees
             const absentList = allEmployees?.filter(emp => !presentEmployeeIds.has(emp.id)) || [];
 
             setCheckedIn(checkedInList);
@@ -128,8 +126,7 @@ export default function AttendanceReport() {
 
         } catch (error: any) {
             console.error('Error loading attendance:', error);
-            const msg = error.message || 'Failed to load attendance data';
-            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+            Alert.alert('Error', error.message || 'Failed to load attendance data');
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -141,55 +138,24 @@ export default function AttendanceReport() {
         loadAttendanceData();
     };
 
-    // Filter lists based on search
     const filteredCheckedIn = checkedIn.filter(r =>
-        (r.employee.first_name + ' ' + r.employee.last_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
-        r.employee.role.toLowerCase().includes(searchQuery.toLowerCase())
+        (r.employee.first_name + ' ' + r.employee.last_name).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const filteredAbsent = absent.filter(e =>
-        (e.first_name + ' ' + e.last_name).toLowerCase().includes(searchQuery.toLowerCase()) ||
-        e.role.toLowerCase().includes(searchQuery.toLowerCase())
+        (e.first_name + ' ' + e.last_name).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const filteredCompleted = completed.filter(r =>
         (r.employee.first_name + ' ' + r.employee.last_name).toLowerCase().includes(searchQuery.toLowerCase())
     );
 
-    async function handleEmployeePress(employee: any) {
-        setSelectedEmployee(employee);
+    function handleEmployeePress(employee: any) {
+        setSelectedEmployee({
+            ...employee,
+            id: employee.id || employee.employee_id // Handle both record and employee objects
+        });
         setShowDetailModal(true);
-        setLoadingStats(true); // Start loading stats
-
-        // Calculate Stats
-        // 1. Days Present (count logs)
-        // 2. Leave Used (sum leave requests)
-        // 3. Attendance Rate (Present / Working Days since started)
-
-        try {
-            // Mock stats for now to demonstrate UI (Implementation would require more RPCs or complex queries)
-            // In a real app, we'd fetch:
-            // - count(attendance_logs) where employee_id = id
-            // - count(leave_requests) where status = approved
-
-            // Simulating a fetch delay
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            const stats = {
-                daysPresent: Math.floor(Math.random() * 20) + 1, // Mock
-                daysAbsent: Math.floor(Math.random() * 5),
-                leavesUsed: Math.floor(Math.random() * 5),
-                leavesAllowed: employee.allowed_leave_days || 21,
-                attendanceRate: 85 + Math.random() * 15 // Mock 85-100%
-            };
-
-            setSelectedEmployee((prev: any) => ({ ...prev, stats }));
-
-        } catch (error) {
-            console.error('Error fetching stats:', error);
-        } finally {
-            setLoadingStats(false);
-        }
     }
 
     function formatTime(isoString: string) {
@@ -198,136 +164,138 @@ export default function AttendanceReport() {
 
     if (loading && !refreshing) {
         return (
-            <View style={styles.centerContainer}>
-                <Text>Loading attendance report...</Text>
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color={THEME.colors.primary} />
             </View>
         );
     }
 
     return (
-        <ScrollView
-            style={styles.container}
-            refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
-        >
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
             <View style={styles.header}>
-                <Text style={styles.title}>Attendance Overview</Text>
-                <Text style={styles.date}>{new Date().toLocaleDateString()}</Text>
-
-                <TextInput
-                    style={styles.searchBar}
-                    placeholder="🔍 Search employees..."
-                    value={searchQuery}
-                    onChangeText={setSearchQuery}
-                />
+                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                    <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+                </TouchableOpacity>
+                <TouchableOpacity onPress={onRefresh} style={styles.refreshBtn}>
+                    <Ionicons name="refresh" size={20} color={THEME.colors.primary} />
+                </TouchableOpacity>
             </View>
 
-            {/* Stats Cards */}
-            <View style={styles.statsContainer}>
-                <View style={[styles.statCard, { backgroundColor: '#e3f2fd' }]}>
-                    <Text style={[styles.statValue, { color: '#1976d2' }]}>{presentCount}</Text>
-                    <Text style={styles.statLabel}>Present</Text>
+            <ScrollView
+                contentContainerStyle={styles.scrollContent}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={THEME.colors.primary} />}
+            >
+                <View style={styles.searchContainer}>
+                    <Ionicons name="search" size={20} color={THEME.colors.text.muted} style={styles.searchIcon} />
+                    <TextInput
+                        style={styles.searchBar}
+                        placeholder="Search employees..."
+                        value={searchQuery}
+                        onChangeText={setSearchQuery}
+                        placeholderTextColor={THEME.colors.text.muted}
+                    />
                 </View>
-                <View style={[styles.statCard, { backgroundColor: '#ffebee' }]}>
-                    <Text style={[styles.statValue, { color: '#c62828' }]}>{absentCount}</Text>
-                    <Text style={styles.statLabel}>Absent</Text>
-                </View>
-                <View style={[styles.statCard, { backgroundColor: '#f5f5f5' }]}>
-                    <Text style={[styles.statValue, { color: '#616161' }]}>{totalEmployees}</Text>
-                    <Text style={styles.statLabel}>Total</Text>
-                </View>
-            </View>
 
-            {/* Currently Checked In */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>🟢 Currently Checked In ({checkedIn.length})</Text>
+                <View style={styles.statsGrid}>
+                    <ModernCard style={[styles.statCard, { borderLeftColor: THEME.colors.success, borderLeftWidth: 4 }]}>
+                        <Text style={[styles.statValue, { color: THEME.colors.success }]}>{presentCount}</Text>
+                        <Text style={styles.statLabel}>Present</Text>
+                    </ModernCard>
+                    <ModernCard style={[styles.statCard, { borderLeftColor: THEME.colors.error, borderLeftWidth: 4 }]}>
+                        <Text style={[styles.statValue, { color: THEME.colors.error }]}>{absentCount}</Text>
+                        <Text style={styles.statLabel}>Absent</Text>
+                    </ModernCard>
+                    <ModernCard style={[styles.statCard, { borderLeftColor: THEME.colors.info, borderLeftWidth: 4 }]}>
+                        <Text style={[styles.statValue, { color: THEME.colors.info }]}>{totalEmployees}</Text>
+                        <Text style={styles.statLabel}>Total Staff</Text>
+                    </ModernCard>
                 </View>
-                {checkedIn.length === 0 ? (
-                    <Text style={styles.emptyText}>No one currently checked in</Text>
-                ) : (
-                    filteredCheckedIn.map(record => (
-                        <TouchableOpacity key={record.id} onPress={() => handleEmployeePress({
-                            ...record.employee,
-                            id: record.employee_id,
-                            department: record.employee.team?.name // Map team to department
-                        })}>
-                            <View style={styles.card}>
-                                <View style={styles.cardRow}>
-                                    <View>
-                                        <Text style={styles.name}>
-                                            {record.employee.first_name} {record.employee.last_name}
-                                        </Text>
-                                        <Text style={styles.jobTitle}>
-                                            {record.employee.job_title} • {record.employee.role.toUpperCase()}
-                                        </Text>
-                                    </View>
-                                    <View style={styles.timeBadge}>
-                                        <Text style={styles.timeText}>In: {formatTime(record.check_in_time)}</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))
-                )}
-            </View>
 
-            {/* Absent */}
-            <View style={styles.section}>
-                <View style={styles.sectionHeader}>
-                    <Text style={styles.sectionTitle}>🔴 Absent ({absent.length})</Text>
-                </View>
-                {absent.length === 0 ? (
-                    <Text style={styles.emptyText}>Everyone is present!</Text>
-                ) : (
-                    filteredAbsent.map(emp => (
-                        <TouchableOpacity key={emp.id} onPress={() => handleEmployeePress({
-                            ...emp,
-                            department: emp.team?.name
-                        })}>
-                            <View style={[styles.card, styles.absentCard]}>
-                                <View style={styles.cardRow}>
-                                    <View>
-                                        <Text style={styles.name}>
-                                            {emp.first_name} {emp.last_name}
-                                        </Text>
-                                        <Text style={styles.jobTitle}>{emp.job_title}</Text>
-                                    </View>
-                                    <View style={styles.statusBadge}>
-                                        <Text style={styles.statusText}>Absent</Text>
-                                    </View>
-                                </View>
-                            </View>
-                        </TouchableOpacity>
-                    ))
-                )}
-            </View>
-
-            {/* Completed */}
-            {completed.length > 0 && (
+                {/* Checked In List */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>🏁 Completed Workday ({completed.length})</Text>
+                        <View style={styles.sectionIndicator} />
+                        <Text style={styles.sectionTitle}>Currently Working ({checkedIn.length})</Text>
                     </View>
-                    {completed.map(record => (
-                        <View key={record.id} style={[styles.card, styles.completedCard]}>
-                            <View style={styles.cardRow}>
-                                <View>
-                                    <Text style={styles.name}>
-                                        {record.employee.first_name} {record.employee.last_name}
-                                    </Text>
-                                    <Text style={styles.jobTitle}>{record.employee.job_title}</Text>
-                                </View>
-                                <View>
-                                    <Text style={styles.timeDetail}>In: {formatTime(record.check_in_time)}</Text>
-                                    <Text style={styles.timeDetail}>Out: {formatTime(record.check_out_time!)}</Text>
-                                </View>
-                            </View>
-                        </View>
-                    ))}
+                    {checkedIn.length === 0 ? (
+                        <Text style={styles.emptyText}>No active check-ins for today.</Text>
+                    ) : (
+                        filteredCheckedIn.map(record => (
+                            <TouchableOpacity key={record.id} onPress={() => handleEmployeePress({
+                                ...record.employee,
+                                id: record.employee_id,
+                                department: record.employee.team?.name
+                            })}>
+                                <ModernCard style={styles.empCard}>
+                                    <View style={styles.empInfo}>
+                                        <View>
+                                            <Text style={styles.empName}>{record.employee.first_name} {record.employee.last_name}</Text>
+                                            <Text style={styles.empTitle}>{record.employee.job_title}</Text>
+                                        </View>
+                                        <View style={styles.statusBadge}>
+                                            <View style={styles.activeDot} />
+                                            <Text style={styles.statusText}>IN: {formatTime(record.check_in_time)}</Text>
+                                        </View>
+                                    </View>
+                                </ModernCard>
+                            </TouchableOpacity>
+                        ))
+                    )}
                 </View>
-            )}
 
-            <View style={{ height: 40 }} />
+                {/* Absent List */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <View style={[styles.sectionIndicator, { backgroundColor: THEME.colors.error }]} />
+                        <Text style={styles.sectionTitle}>Absent Today ({absent.length})</Text>
+                    </View>
+                    {absent.length === 0 ? (
+                        <Text style={styles.emptyText}>Full attendance today!</Text>
+                    ) : (
+                        filteredAbsent.map(emp => (
+                            <TouchableOpacity key={emp.id} onPress={() => handleEmployeePress(emp)}>
+                                <ModernCard style={styles.empCard}>
+                                    <View style={styles.empInfo}>
+                                        <View>
+                                            <Text style={styles.empName}>{emp.first_name} {emp.last_name}</Text>
+                                            <Text style={styles.empTitle}>{emp.job_title}</Text>
+                                        </View>
+                                        <View style={[styles.statusBadge, { backgroundColor: THEME.colors.error + '10' }]}>
+                                            <Text style={[styles.statusText, { color: THEME.colors.error }]}>ABSENT</Text>
+                                        </View>
+                                    </View>
+                                </ModernCard>
+                            </TouchableOpacity>
+                        ))
+                    )}
+                </View>
+
+                {/* Completed List */}
+                {completed.length > 0 && (
+                    <View style={styles.section}>
+                        <View style={styles.sectionHeader}>
+                            <View style={[styles.sectionIndicator, { backgroundColor: THEME.colors.text.muted }]} />
+                            <Text style={styles.sectionTitle}>Shift Completed ({completed.length})</Text>
+                        </View>
+                        {filteredCompleted.map(record => (
+                            <ModernCard key={record.id} style={[styles.empCard, { opacity: 0.7 }]}>
+                                <View style={styles.empInfo}>
+                                    <View>
+                                        <Text style={styles.empName}>{record.employee.first_name} {record.employee.last_name}</Text>
+                                        <Text style={styles.empTitle}>{record.employee.job_title}</Text>
+                                    </View>
+                                    <View style={styles.timeInfo}>
+                                        <Text style={styles.timeDetail}>In: {formatTime(record.check_in_time)}</Text>
+                                        <Text style={styles.timeDetail}>Out: {formatTime(record.check_out_time!)}</Text>
+                                    </View>
+                                </View>
+                            </ModernCard>
+                        ))}
+                    </View>
+                )}
+                <View style={{ height: 40 }} />
+            </ScrollView>
 
             <EmployeeDetailModal
                 visible={showDetailModal}
@@ -335,149 +303,63 @@ export default function AttendanceReport() {
                 employee={selectedEmployee}
                 loadingStats={loadingStats}
             />
-        </ScrollView>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    centerContainer: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
+    container: { flex: 1, backgroundColor: THEME.colors.background },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: {
-        padding: 20,
-        backgroundColor: '#fff',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: THEME.spacing.lg,
+        paddingVertical: THEME.spacing.md,
+        backgroundColor: 'white',
         borderBottomWidth: 1,
         borderBottomColor: '#eee',
     },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    date: {
-        fontSize: 16,
-        color: '#666',
-        marginTop: 4,
-        marginBottom: 12,
-    },
-    searchBar: {
-        backgroundColor: '#f5f5f5',
-        padding: 10,
-        borderRadius: 8,
-        fontSize: 16,
-    },
-    statsContainer: {
+    backBtn: { padding: 8, borderRadius: 12, backgroundColor: '#f8f9fa' },
+    refreshBtn: { padding: 8, borderRadius: 12, backgroundColor: THEME.colors.primary + '10' },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: THEME.colors.text.primary },
+    scrollContent: { padding: THEME.spacing.lg },
+    searchContainer: {
         flexDirection: 'row',
-        padding: 16,
-        gap: 12,
-    },
-    statCard: {
-        flex: 1,
-        padding: 16,
-        borderRadius: 12,
         alignItems: 'center',
-        elevation: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-    },
-    statValue: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    statLabel: {
-        fontSize: 12,
-        color: '#666',
-        textTransform: 'uppercase',
-    },
-    section: {
-        padding: 16,
-        paddingTop: 8,
-    },
-    sectionHeader: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: 12,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        color: '#444',
-    },
-    emptyText: {
-        color: '#999',
-        fontStyle: 'italic',
-        textAlign: 'center',
-        marginTop: 8,
-    },
-    card: {
         backgroundColor: 'white',
-        borderRadius: 12,
-        padding: 16,
-        marginBottom: 12,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    absentCard: {
-        borderLeftWidth: 4,
-        borderLeftColor: '#ef5350',
-    },
-    completedCard: {
-        opacity: 0.8,
-        backgroundColor: '#f9f9f9',
-    },
-    cardRow: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    name: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#333',
-    },
-    jobTitle: {
-        fontSize: 14,
-        color: '#666',
-        marginTop: 2,
-    },
-    timeBadge: {
-        backgroundColor: '#e8f5e9',
-        paddingHorizontal: 12,
-        paddingVertical: 6,
         borderRadius: 16,
+        paddingHorizontal: 16,
+        marginBottom: 24,
+        borderWidth: 1,
+        borderColor: '#eee',
     },
-    timeText: {
-        color: '#2e7d32',
-        fontWeight: '600',
-        fontSize: 12,
-    },
+    searchIcon: { marginRight: 12 },
+    searchBar: { flex: 1, paddingVertical: 14, fontSize: 15, color: THEME.colors.text.primary },
+    statsGrid: { flexDirection: 'row', gap: 12, marginBottom: 32 },
+    statCard: { flex: 1, padding: 16, alignItems: 'center' },
+    statValue: { fontSize: 22, fontWeight: 'bold', marginBottom: 4 },
+    statLabel: { fontSize: 11, color: THEME.colors.text.muted, fontWeight: '600', textTransform: 'uppercase' },
+    section: { marginBottom: 32 },
+    sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
+    sectionIndicator: { width: 4, height: 16, borderRadius: 2, backgroundColor: THEME.colors.success },
+    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
+    emptyText: { textAlign: 'center', color: THEME.colors.text.muted, fontSize: 14, fontStyle: 'italic', marginTop: 8 },
+    empCard: { padding: 16, marginBottom: 12 },
+    empInfo: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    empName: { fontSize: 15, fontWeight: 'bold', color: THEME.colors.text.primary },
+    empTitle: { fontSize: 12, color: THEME.colors.text.secondary, marginTop: 2 },
     statusBadge: {
-        backgroundColor: '#ffebee',
-        paddingHorizontal: 12,
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: THEME.colors.success + '10',
+        paddingHorizontal: 10,
         paddingVertical: 6,
-        borderRadius: 16,
+        borderRadius: 10,
+        gap: 6
     },
-    statusText: {
-        color: '#c62828',
-        fontSize: 12,
-        fontWeight: '600',
-    },
-    timeDetail: {
-        fontSize: 12,
-        color: '#666',
-        textAlign: 'right',
-    },
+    activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: THEME.colors.success },
+    statusText: { fontSize: 11, fontWeight: 'bold', color: THEME.colors.success },
+    timeInfo: { alignItems: 'flex-end' },
+    timeDetail: { fontSize: 11, color: THEME.colors.text.secondary, fontWeight: '500' }
 });

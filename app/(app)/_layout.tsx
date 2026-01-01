@@ -2,19 +2,20 @@ import { Stack } from 'expo-router';
 
 export default function AppLayout() {
     return (
-        <Stack>
-            <Stack.Screen name="dashboard" options={{ title: 'Dashboard' }} />
-            <Stack.Screen name="check-in" options={{ title: 'Check In' }} />
-            <Stack.Screen name="leave" options={{ title: 'Leave Requests' }} />
-            <Stack.Screen name="employees" options={{ title: 'Employees' }} />
-            <Stack.Screen name="payslips" options={{ title: 'Payslips' }} />
-            <Stack.Screen name="approvals" options={{ title: 'Leave Approvals' }} />
-            <Stack.Screen name="teams" options={{ title: 'Teams' }} />
-            <Stack.Screen name="payroll" options={{ title: 'Payroll' }} />
-            <Stack.Screen name="my-department/index" options={{ title: 'My Department' }} />
-            <Stack.Screen name="chat/index" options={{ title: 'Messages' }} />
-            <Stack.Screen name="chat/[id]" options={{ title: 'Chat', headerShown: false }} />
-            <Stack.Screen name="chat/new" options={{ title: 'Starting Chat...', headerShown: false }} />
+        <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="dashboard" />
+            <Stack.Screen name="check-in" />
+            <Stack.Screen name="leave" />
+            <Stack.Screen name="employees" />
+            <Stack.Screen name="payslips" />
+            <Stack.Screen name="approvals" />
+            <Stack.Screen name="teams" />
+            <Stack.Screen name="payroll" />
+            <Stack.Screen name="my-department/index" />
+            <Stack.Screen name="chat/index" />
+            <Stack.Screen name="chat/[id]" />
+            <Stack.Screen name="chat/new" />
+            <Stack.Screen name="profile" />
         </Stack>
     );
 }

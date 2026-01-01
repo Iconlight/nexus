@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, Alert, Platform } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../src/services/supabase';
 import { useAuth } from '../../../src/context/AuthContext';
 import DepartmentCalendar from '../../../src/components/DepartmentCalendar';
@@ -9,12 +9,15 @@ import ManageLeadersModal from '../../../src/components/ManageLeadersModal';
 import EmployeeDetailModal from '../../../src/components/EmployeeDetailModal';
 import AddMemberModal from '../../../src/components/AddMemberModal';
 import LeaveRequestModal from '../../../src/components/LeaveRequestModal';
-import { Alert, Platform } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { THEME } from '../../../src/constants/Theme';
+import { ModernCard } from '../../../src/components/ModernCard';
 
 export default function DepartmentDetail() {
     const { id } = useLocalSearchParams();
     const teamId = Array.isArray(id) ? id[0] : id;
     const { user } = useAuth();
+    const router = useRouter();
 
     const [team, setTeam] = useState<any>(null);
     const [members, setMembers] = useState<any[]>([]);
@@ -22,87 +25,49 @@ export default function DepartmentDetail() {
     const [activeTab, setActiveTab] = useState<'overview' | 'calendar' | 'reports' | 'requests'>('overview');
     const [loading, setLoading] = useState(true);
 
-    // Leader Management
     const [showLeadersModal, setShowLeadersModal] = useState(false);
     const [eligibleManagers, setEligibleManagers] = useState<any[]>([]);
-
-    // Employee Details
     const [selectedEmployee, setSelectedEmployee] = useState<any>(null);
     const [selectedLeaveRequest, setSelectedLeaveRequest] = useState<any>(null);
     const [currentUserRole, setCurrentUserRole] = useState<string>('');
     const [showAddMemberModal, setShowAddMemberModal] = useState(false);
 
     useEffect(() => {
-        if (teamId) {
-            loadTeamData();
-        }
+        if (teamId) loadTeamData();
     }, [teamId]);
 
     async function loadTeamData() {
         setLoading(true);
         try {
-            // 1. Get Team Details
-            const { data: teamData, error: teamError } = await supabase
-                .from('teams')
-                .select('*')
-                .eq('id', teamId)
-                .single();
-
+            const { data: teamData, error: teamError } = await supabase.from('teams').select('*').eq('id', teamId).single();
             if (teamError) throw teamError;
             setTeam(teamData);
 
-            // 2. Get Members with detailed info
-            const { data: membersData, error: membersError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('team_id', teamId);
-
+            const { data: membersData, error: membersError } = await supabase.from('profiles').select('*').eq('team_id', teamId);
             if (membersError) throw membersError;
 
-            // 3. Get Check-in status
             const today = new Date().toISOString().split('T')[0];
-            const { data: attendance } = await supabase
-                .from('attendance_logs')
-                .select('employee_id, check_in_time, check_out_time')
-                .eq('date', today)
-                .in('employee_id', membersData?.map(m => m.id) || []);
+            const { data: attendance } = await supabase.from('attendance_logs').select('employee_id, check_in_time, check_out_time').eq('date', today).in('employee_id', membersData?.map(m => m.id) || []);
 
             const enrichedMembers = membersData?.map(m => {
                 const log = attendance?.find(a => a.employee_id === m.id);
-                return {
-                    ...m,
-                    status: log ? (log.check_out_time ? 'Checked Out' : 'Present') : 'Absent',
-                    check_in_time: log?.check_in_time
-                };
+                return { ...m, status: log ? (log.check_out_time ? 'Checked Out' : 'Present') : 'Absent' };
             }) || [];
-
             setMembers(enrichedMembers);
 
-            // 4. Load Eligible Managers & Current Role
             const { data: profile } = await supabase.from('profiles').select('company_id, role').eq('id', user?.id).single();
             if (profile) {
                 setCurrentUserRole(profile.role);
-                const { data: allStaff } = await supabase
-                    .from('profiles')
-                    .select('id, first_name, last_name, email, role')
-                    .eq('company_id', profile.company_id)
-                    .in('role', ['employee', 'manager']);
-
+                const { data: allStaff } = await supabase.from('profiles').select('id, first_name, last_name, email, role').eq('company_id', profile.company_id).in('role', ['employee', 'manager']);
                 setEligibleManagers(allStaff || []);
             }
 
-            // 5. Load Pending Leave Requests for Team
             const { data: requests } = await supabase
                 .from('leave_requests')
-                .select(`
-                    id, start_date, end_date, type, status, reason, 
-                    attachment_url, reviewer_note,
-                    profiles:employee_id (first_name, last_name)
-                `)
+                .select('id, start_date, end_date, type, status, reason, attachment_url, reviewer_note, profiles:employee_id (first_name, last_name)')
                 .eq('status', 'pending')
                 .in('employee_id', membersData?.map(m => m.id) || [])
                 .order('start_date');
-
             setLeaveRequests(requests || []);
 
         } catch (error) {
@@ -113,167 +78,143 @@ export default function DepartmentDetail() {
     }
 
     async function removeMember(memberId: string) {
-        // Web compatible confirm
         const confirmMsg = "Remove this member from the department?";
-
-        if (Platform.OS === 'web') {
-            if (!window.confirm(confirmMsg)) return;
-        } else {
-            Alert.alert('Confirm', confirmMsg, [
-                { text: 'Cancel', style: 'cancel' },
-                { text: 'Remove', style: 'destructive', onPress: () => performRemove(memberId) }
-            ]);
-            return;
-        }
-        performRemove(memberId);
+        const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : await new Promise(r => Alert.alert('Confirm', confirmMsg, [{ text: 'Cancel' }, { text: 'Remove', style: 'destructive', onPress: () => r(true) }]));
+        if (confirmed) performRemove(memberId);
     }
 
     async function performRemove(memberId: string) {
         try {
-            const { error } = await supabase
-                .from('profiles')
-                .update({ team_id: null })
-                .eq('id', memberId);
-
+            const { error } = await supabase.from('profiles').update({ team_id: null }).eq('id', memberId);
             if (error) throw error;
             loadTeamData();
-        } catch (error: any) {
-            Alert.alert('Error', error.message);
-        }
+        } catch (error: any) { Alert.alert('Error', error.message); }
     }
 
     if (loading) {
-        return <View style={styles.center}><ActivityIndicator size="large" color="#2196f3" /></View>;
+        return (
+            <View style={styles.center}>
+                <ActivityIndicator size="large" color={THEME.colors.primary} />
+            </View>
+        );
     }
 
     return (
-        <View style={styles.container}>
+        <SafeAreaView style={styles.container}>
+            <StatusBar barStyle="dark-content" />
             <View style={styles.header}>
-                <View>
-                    <Text style={styles.title}>{team?.name}</Text>
-                    <Text style={styles.subtitle}>{team?.description || 'No description'}</Text>
+                <View style={styles.headerTop}>
+                    <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+                        <Ionicons name="chevron-back" size={28} color={THEME.colors.text.primary} />
+                    </TouchableOpacity>
+                    <View style={styles.headerTitleContainer}>
+                        <Text style={styles.title}>{team?.name}</Text>
+                        <Text style={styles.subtitle} numberOfLines={1}>{team?.description || 'Department Overview'}</Text>
+                    </View>
                 </View>
 
-                {/* Admin Actions */}
-                {['admin', 'ceo', 'hr'].includes(currentUserRole) && (
-                    <TouchableOpacity
-                        style={styles.manageButton}
-                        onPress={() => setShowLeadersModal(true)}
-                    >
-                        <Text style={styles.manageButtonText}>Manage Leaders</Text>
-                    </TouchableOpacity>
-                )}
-
-                {/* Manager Actions */}
-                {['manager', 'admin', 'ceo'].includes(currentUserRole) && (
-                    <TouchableOpacity
-                        style={[styles.manageButton, { marginLeft: 8, backgroundColor: '#e8f5e9' }]}
-                        onPress={() => setShowAddMemberModal(true)}
-                    >
-                        <Text style={[styles.manageButtonText, { color: '#2e7d32' }]}>Add Member</Text>
-                    </TouchableOpacity>
-                )}
+                <View style={styles.headerActions}>
+                    {['admin', 'ceo', 'hr'].includes(currentUserRole) && (
+                        <TouchableOpacity style={styles.actionBtn} onPress={() => setShowLeadersModal(true)}>
+                            <Ionicons name="people-outline" size={18} color={THEME.colors.primary} />
+                            <Text style={styles.actionBtnText}>Leaders</Text>
+                        </TouchableOpacity>
+                    )}
+                    {['manager', 'admin', 'ceo'].includes(currentUserRole) && (
+                        <TouchableOpacity style={[styles.actionBtn, { marginLeft: 8 }]} onPress={() => setShowAddMemberModal(true)}>
+                            <Ionicons name="person-add-outline" size={18} color={THEME.colors.primary} />
+                            <Text style={styles.actionBtnText}>Add Member</Text>
+                        </TouchableOpacity>
+                    )}
+                </View>
             </View>
 
-            <View style={styles.tabs}>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'overview' && styles.activeTab]}
-                    onPress={() => setActiveTab('overview')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'overview' && styles.activeTabText]}>Overview</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'calendar' && styles.activeTab]}
-                    onPress={() => setActiveTab('calendar')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'calendar' && styles.activeTabText]}>Calendar</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'reports' && styles.activeTab]}
-                    onPress={() => setActiveTab('reports')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'reports' && styles.activeTabText]}>Reports</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                    style={[styles.tab, activeTab === 'requests' && styles.activeTab]}
-                    onPress={() => setActiveTab('requests')}
-                >
-                    <Text style={[styles.tabText, activeTab === 'requests' && styles.activeTabText]}>Requests</Text>
-                    {leaveRequests.length > 0 && <View style={styles.badgeDot} />}
-                </TouchableOpacity>
+            <View style={styles.tabsContainer}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsScroll}>
+                    {[
+                        { id: 'overview', label: 'Overview', icon: 'grid-outline' },
+                        { id: 'calendar', label: 'Calendar', icon: 'calendar-outline' },
+                        { id: 'reports', label: 'Reports', icon: 'document-text-outline' },
+                        { id: 'requests', label: 'Requests', icon: 'time-outline', badge: leaveRequests.length > 0 }
+                    ].map(tab => (
+                        <TouchableOpacity
+                            key={tab.id}
+                            style={[styles.tab, activeTab === tab.id && styles.activeTab]}
+                            onPress={() => setActiveTab(tab.id as any)}
+                        >
+                            <Ionicons name={tab.icon as any} size={18} color={activeTab === tab.id ? THEME.colors.primary : THEME.colors.text.secondary} />
+                            <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>{tab.label}</Text>
+                            {tab.badge && <View style={styles.badgePoint} />}
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
             </View>
 
             <View style={styles.content}>
                 {activeTab === 'overview' && (
-                    <ScrollView style={styles.page}>
-                        <View style={styles.rosterSection}>
-                            <Text style={styles.sectionTitle}>Members ({members.length})</Text>
-                            {members.map(member => (
-                                <TouchableOpacity
-                                    key={member.id}
-                                    style={styles.memberCard}
-                                    onPress={() => setSelectedEmployee(member)}
-                                >
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.memberName}>{member.first_name} {member.last_name}</Text>
-                                        <Text style={styles.memberRole}>{member.role}</Text>
+                    <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 40 }}>
+                        <View style={styles.statsRow}>
+                            <ModernCard style={styles.statMiniCard}>
+                                <Text style={styles.statValue}>{members.length}</Text>
+                                <Text style={styles.statLabel}>Team Size</Text>
+                            </ModernCard>
+                            <ModernCard style={styles.statMiniCard}>
+                                <Text style={[styles.statValue, { color: THEME.colors.success }]}>{members.filter(m => m.status === 'Present').length}</Text>
+                                <Text style={styles.statLabel}>Present</Text>
+                            </ModernCard>
+                        </View>
+
+                        <Text style={styles.sectionTitle}>Team Roster</Text>
+                        {members.map(member => (
+                            <TouchableOpacity key={member.id} activeOpacity={0.9} onPress={() => setSelectedEmployee(member)}>
+                                <ModernCard style={styles.memberCard}>
+                                    <View style={styles.avatar}>
+                                        <Text style={styles.avatarText}>{member.first_name[0]}{member.last_name[0]}</Text>
+                                        <View style={[styles.statusDot, { backgroundColor: member.status === 'Present' ? THEME.colors.success : member.status === 'Checked Out' ? THEME.colors.warning : THEME.colors.error }]} />
                                     </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <View style={[
-                                            styles.statusBadge,
-                                            member.status === 'Present' ? styles.statusPresent :
-                                                member.status === 'Checked Out' ? styles.statusCheckedOut :
-                                                    styles.statusAbsent
-                                        ]}>
-                                            <Text style={styles.statusText}>{member.status}</Text>
-                                        </View>
-                                        {/* Remove Button for Managers/Admins */}
+                                    <View style={styles.memberInfo}>
+                                        <Text style={styles.memberName}>{member.first_name} {member.last_name}</Text>
+                                        <Text style={styles.memberRole}>{member.job_title || 'Employee'} • {member.role}</Text>
+                                    </View>
+                                    <View style={styles.memberRight}>
                                         {['manager', 'admin', 'ceo'].includes(currentUserRole) && (
-                                            <TouchableOpacity
-                                                onPress={(e) => {
-                                                    e.stopPropagation(); // Prevent opening detail modal
-                                                    removeMember(member.id);
-                                                }}
-                                                style={{ padding: 8, backgroundColor: '#ffebee', borderRadius: 4, marginLeft: 8 }}
-                                            >
-                                                <Text style={{ color: '#d32f2f', fontSize: 10, fontWeight: 'bold' }}>REMOVE</Text>
+                                            <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeMember(member.id); }} style={styles.removeBtn}>
+                                                <Ionicons name="remove-circle-outline" size={22} color={THEME.colors.error} />
                                             </TouchableOpacity>
                                         )}
+                                        <Ionicons name="chevron-forward" size={18} color={THEME.colors.text.muted} />
                                     </View>
-                                </TouchableOpacity>
-                            ))}
-                        </View>
+                                </ModernCard>
+                            </TouchableOpacity>
+                        ))}
                     </ScrollView>
                 )}
 
                 {activeTab === 'calendar' && <DepartmentCalendar teamId={teamId} />}
                 {activeTab === 'reports' && <DepartmentReports teamId={teamId} />}
                 {activeTab === 'requests' && (
-                    <ScrollView style={styles.page}>
-                        <Text style={styles.sectionTitle}>Pending Requests ({leaveRequests.length})</Text>
+                    <ScrollView style={styles.page} contentContainerStyle={{ paddingBottom: 40 }}>
+                        <Text style={styles.sectionTitle}>Pending Leave Requests</Text>
                         {leaveRequests.length === 0 ? (
-                            <Text style={{ fontStyle: 'italic', color: '#999' }}>No pending leave requests.</Text>
+                            <View style={styles.emptyState}>
+                                <Ionicons name="checkmark-circle-outline" size={48} color={THEME.colors.success} />
+                                <Text style={styles.emptyText}>All caught up!</Text>
+                            </View>
                         ) : (
                             leaveRequests.map(req => (
-                                <TouchableOpacity
-                                    key={req.id}
-                                    onPress={() => setSelectedLeaveRequest(req)}
-                                    activeOpacity={0.7}
-                                >
-                                    <View style={styles.requestCard}>
-                                        <View style={{ flex: 1 }}>
+                                <TouchableOpacity key={req.id} activeOpacity={0.9} onPress={() => setSelectedLeaveRequest(req)}>
+                                    <ModernCard style={styles.requestCard}>
+                                        <View style={styles.reqHeader}>
                                             <Text style={styles.reqName}>{req.profiles.first_name} {req.profiles.last_name}</Text>
-                                            <Text style={styles.reqType}>{req.type} • {req.start_date} to {req.end_date}</Text>
-                                            <Text style={styles.reqReason} numberOfLines={2}>{req.reason}</Text>
-                                            <View style={{ flexDirection: 'row', marginTop: 4, alignItems: 'center' }}>
-                                                <Text style={{ fontSize: 12, color: '#2196f3', fontWeight: '500' }}>Tap to view details</Text>
-                                                {req.attachment_url && <Text style={{ fontSize: 12, color: '#666', marginLeft: 8 }}>📎 attached</Text>}
-                                            </View>
+                                            <View style={styles.reqBadge}><Text style={styles.reqBadgeText}>{req.type}</Text></View>
                                         </View>
-                                        <View style={styles.reqBadge}>
-                                            <Text style={styles.reqBadgeText}>PENDING</Text>
+                                        <Text style={styles.reqDates}>{new Date(req.start_date).toLocaleDateString()} - {new Date(req.end_date).toLocaleDateString()}</Text>
+                                        <Text style={styles.reqReason} numberOfLines={2}>{req.reason || 'No reason provided'}</Text>
+                                        <View style={styles.reqFooter}>
+                                            <Text style={styles.reqActionHint}>View Request</Text>
+                                            {req.attachment_url && <Ionicons name="attach" size={16} color={THEME.colors.text.muted} />}
                                         </View>
-                                    </View>
+                                    </ModernCard>
                                 </TouchableOpacity>
                             ))
                         )}
@@ -281,159 +222,61 @@ export default function DepartmentDetail() {
                 )}
             </View>
 
-            <ManageLeadersModal
-                visible={showLeadersModal}
-                onClose={() => setShowLeadersModal(false)}
-                teamId={teamId}
-                teamName={team?.name}
-                eligibleManagers={eligibleManagers}
-                onUpdate={loadTeamData}
-            />
-
-            <EmployeeDetailModal
-                visible={!!selectedEmployee}
-                onClose={() => setSelectedEmployee(null)}
-                employee={selectedEmployee}
-            />
-
-            <AddMemberModal
-                visible={showAddMemberModal}
-                onClose={() => setShowAddMemberModal(false)}
-                teamId={teamId}
-                onUpdate={loadTeamData}
-            />
-
-            <LeaveRequestModal
-                visible={!!selectedLeaveRequest}
-                request={selectedLeaveRequest}
-                onClose={() => setSelectedLeaveRequest(null)}
-                onUpdate={loadTeamData}
-            />
-        </View >
+            <ManageLeadersModal visible={showLeadersModal} onClose={() => setShowLeadersModal(false)} teamId={teamId} teamName={team?.name} eligibleManagers={eligibleManagers} onUpdate={loadTeamData} />
+            <EmployeeDetailModal visible={!!selectedEmployee} onClose={() => setSelectedEmployee(null)} employee={selectedEmployee} />
+            <AddMemberModal visible={showAddMemberModal} onClose={() => setShowAddMemberModal(false)} teamId={teamId} onUpdate={loadTeamData} />
+            <LeaveRequestModal visible={!!selectedLeaveRequest} request={selectedLeaveRequest} onClose={() => setSelectedLeaveRequest(null)} onUpdate={loadTeamData} />
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#f5f5f5',
-    },
-    center: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    header: {
-        padding: 20,
-        backgroundColor: 'white',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    title: {
-        fontSize: 24,
-        fontWeight: 'bold',
-        color: '#333',
-    },
-    subtitle: {
-        color: '#666',
-        marginTop: 4,
-    },
-    manageButton: {
-        backgroundColor: '#e3f2fd',
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
-    },
-    manageButtonText: {
-        color: '#2196f3',
-        fontWeight: '600',
-    },
-    tabs: {
-        flexDirection: 'row',
-        backgroundColor: 'white',
-        paddingHorizontal: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: '#eee',
-    },
-    tab: {
-        paddingVertical: 16,
-        marginRight: 24,
-        borderBottomWidth: 2,
-        borderBottomColor: 'transparent',
-    },
-    activeTab: {
-        borderBottomColor: '#2196f3',
-    },
-    tabText: {
-        fontSize: 16,
-        color: '#666',
-        fontWeight: '500',
-    },
-    activeTabText: {
-        color: '#2196f3',
-        fontWeight: '600',
-    },
-    content: {
-        flex: 1,
-    },
-    page: {
-        flex: 1,
-        padding: 16,
-    },
-    rosterSection: {
-        marginBottom: 24,
-    },
-    sectionTitle: {
-        fontSize: 18,
-        fontWeight: '600',
-        marginBottom: 12,
-        color: '#333',
-    },
-    memberCard: {
-        backgroundColor: 'white',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 8,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
-    },
-    memberName: {
-        fontSize: 16,
-        fontWeight: '500',
-    },
-    memberRole: {
-        fontSize: 12,
-        color: '#999',
-    },
-    statusBadge: {
-        paddingHorizontal: 8,
-        paddingVertical: 4,
-        borderRadius: 4,
-    },
-    statusPresent: { backgroundColor: '#e8f5e9' },
-    statusCheckedOut: { backgroundColor: '#fff3e0' },
-    statusAbsent: { backgroundColor: '#ffebee' },
-    statusText: { fontSize: 12, fontWeight: '500', color: '#333' },
-    badgeDot: {
-        width: 8, height: 8, borderRadius: 4, backgroundColor: '#f44336',
-        position: 'absolute', top: 12, right: -10
-    },
-    requestCard: {
-        backgroundColor: 'white', padding: 16, borderRadius: 12, marginBottom: 8,
-        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'
-    },
-    reqName: { fontSize: 16, fontWeight: '500' },
-    reqType: { fontSize: 12, color: '#666', marginTop: 2 },
-    reqReason: { fontSize: 12, color: '#999', marginTop: 2, fontStyle: 'italic' },
-    reqBadge: { backgroundColor: '#fff3e0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 4 },
-    reqBadgeText: { fontSize: 10, fontWeight: 'bold', color: '#e65100' }
+    container: { flex: 1, backgroundColor: THEME.colors.background },
+    header: { padding: THEME.spacing.lg, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border },
+    headerTop: { flexDirection: 'row', alignItems: 'center' },
+    backBtn: { marginRight: 12 },
+    headerTitleContainer: { flex: 1 },
+    title: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary },
+    subtitle: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 2 },
+    headerActions: { flexDirection: 'row', marginTop: 16 },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F7FF', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+    actionBtnText: { color: THEME.colors.primary, fontWeight: 'bold', fontSize: 13, marginLeft: 8 },
+    tabsContainer: { backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border },
+    tabsScroll: { paddingHorizontal: THEME.spacing.lg },
+    tab: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, marginRight: 24, borderBottomWidth: 3, borderBottomColor: 'transparent', gap: 8 },
+    activeTab: { borderBottomColor: THEME.colors.primary },
+    tabText: { fontSize: 14, fontWeight: '600', color: THEME.colors.text.secondary },
+    activeTabText: { color: THEME.colors.primary },
+    badgePoint: { width: 6, height: 6, borderRadius: 3, backgroundColor: THEME.colors.error, position: 'absolute', top: 14, right: -4 },
+    content: { flex: 1 },
+    page: { flex: 1, padding: THEME.spacing.lg },
+    statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+    statMiniCard: { flex: 1, padding: 16, alignItems: 'center' },
+    statValue: { fontSize: 22, fontWeight: 'bold', color: THEME.colors.text.primary },
+    statLabel: { fontSize: 12, color: THEME.colors.text.secondary, marginTop: 4 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: THEME.colors.text.primary },
+    memberCard: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 12 },
+    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F0F2F5', justifyContent: 'center', alignItems: 'center' },
+    avatarText: { fontSize: 14, fontWeight: 'bold', color: THEME.colors.text.secondary },
+    statusDot: { width: 12, height: 12, borderRadius: 6, borderHorizontal: 2, borderColor: 'white', position: 'absolute', bottom: 0, right: 0 },
+    memberInfo: { flex: 1, marginLeft: 16 },
+    memberName: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
+    memberRole: { fontSize: 12, color: THEME.colors.text.secondary, marginTop: 2 },
+    memberRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    removeBtn: { padding: 4 },
+    requestCard: { padding: 16, marginBottom: 12 },
+    reqHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    reqName: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
+    reqBadge: { backgroundColor: '#FFF3E0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    reqBadgeText: { fontSize: 10, color: '#E65100', fontWeight: 'bold' },
+    reqDates: { fontSize: 13, color: THEME.colors.primary, marginTop: 4, fontWeight: '500' },
+    reqReason: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 8, lineHeight: 18 },
+    reqFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
+    reqActionHint: { fontSize: 12, fontWeight: 'bold', color: THEME.colors.primary },
+    emptyState: { alignItems: 'center', marginTop: 40 },
+    emptyText: { fontSize: 16, color: THEME.colors.text.secondary, marginTop: 12 },
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center' }
 });
+
+
+
