@@ -10,6 +10,7 @@ type Message = {
     content: string;
     sender_id: string;
     created_at: string;
+    status?: 'sending' | 'sent' | 'error';
     profiles?: {
         first_name: string;
         last_name: string;
@@ -24,7 +25,6 @@ export default function ChatRoom() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
-    const [sending, setSending] = useState(false);
 
     const flatListRef = useRef<FlatList>(null);
 
@@ -40,7 +40,7 @@ export default function ChatRoom() {
                     event: 'INSERT',
                     schema: 'public',
                     table: 'chat_messages',
-                    filter: `channel_id=eq.${channelId}` // Important: Filter by channel
+                    filter: `channel_id=eq.${channelId}`
                 },
                 (payload) => {
                     // Fetch the full message with sender profile
@@ -60,7 +60,7 @@ export default function ChatRoom() {
                 .from('chat_messages')
                 .select('*, profiles(first_name, last_name)')
                 .eq('channel_id', channelId)
-                .order('created_at', { ascending: true }); // Oldest top, Newest bottom
+                .order('created_at', { ascending: true });
 
             if (error) throw error;
             setMessages(data || []);
@@ -81,48 +81,84 @@ export default function ChatRoom() {
 
         if (data) {
             setMessages(prev => {
-                // Dedupe just in case
+                // Check if this incoming message matches any of our optimistic "sending" messages
+                // We match by content and sender_id within a short time window
+                const optimisticIdx = prev.findIndex(m =>
+                    m.status === 'sending' &&
+                    m.content === data.content &&
+                    m.sender_id === data.sender_id
+                );
+
+                if (optimisticIdx !== -1) {
+                    const newMsgs = [...prev];
+                    newMsgs[optimisticIdx] = { ...data, status: 'sent' };
+                    return newMsgs;
+                }
+
+                // If no optimistic match, just append normally with dedupe
                 if (prev.find(m => m.id === data.id)) return prev;
-                return [...prev, data];
+                return [...prev, { ...data, status: 'sent' }];
             });
             setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
         }
     }
 
     async function sendMessage() {
-        if (!inputText.trim() || sending) return;
-        setSending(true);
+        const text = inputText.trim();
+        if (!text) return;
+
+        // 1. Create temporary optimistic message
+        const tempId = `optimistic-${Math.random().toString(36).substr(2, 9)}`;
+        const optimisticMsg: Message = {
+            id: tempId,
+            content: text,
+            sender_id: user?.id || '',
+            created_at: new Date().toISOString(),
+            status: 'sending'
+        };
+
+        // 2. Add to UI immediately
+        setMessages(prev => [...prev, optimisticMsg]);
+        setInputText('');
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+
         try {
             const { error } = await supabase
                 .from('chat_messages')
                 .insert({
                     channel_id: channelId,
                     sender_id: user?.id,
-                    content: inputText.trim()
+                    content: text
                 });
 
             if (error) throw error;
-            setInputText('');
+            // The real-time listener will handle updating the message status to 'sent' via fetchNewMessage
         } catch (error) {
             console.error('Send error:', error);
-        } finally {
-            setSending(false);
+            // Mark optimistic message as error
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
         }
     }
 
     const renderMessage = ({ item }: { item: Message }) => {
         const isMe = item.sender_id === user?.id;
-        const name = item.profiles ? `${item.profiles.first_name} ${item.profiles.last_name}` : 'Unknown';
+        const name = item.profiles ? `${item.profiles.first_name} ${item.profiles.last_name}` : 'You';
 
         return (
             <View style={[styles.bubbleWrapper, isMe ? styles.myWrapper : styles.otherWrapper]}>
                 {!isMe && <Text style={styles.senderName}>{name}</Text>}
-                <View style={[styles.bubble, isMe ? styles.myBubble : styles.otherBubble]}>
+                <View style={[
+                    styles.bubble,
+                    isMe ? styles.myBubble : styles.otherBubble,
+                    item.status === 'sending' && { opacity: 0.6 }
+                ]}>
                     <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
                         {item.content}
                     </Text>
                 </View>
-                {/* <Text style={styles.time}>{new Date(item.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text> */}
+                {item.status === 'error' && (
+                    <Text style={{ fontSize: 10, color: '#f44336', marginTop: 2 }}>Tap to retry</Text>
+                )}
             </View>
         );
     };

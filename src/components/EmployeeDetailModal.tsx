@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, Button, ActivityIndicator } from 'react-native';
 import { supabase } from '../services/supabase';
+import { useRouter } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
+import { Ionicons } from '@expo/vector-icons';
 
 type EmployeeDetails = {
     id: string;
@@ -34,6 +37,9 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
     const [currentDate, setCurrentDate] = useState(new Date());
     const [stats, setStats] = useState<EmployeeDetails['stats'] | null>(null);
     const [loading, setLoading] = useState(false);
+    const [loadingDM, setLoadingDM] = useState(false);
+    const { user: currentUser } = useAuth();
+    const router = useRouter();
 
     useEffect(() => {
         if (visible && employee) {
@@ -78,6 +84,52 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
         const newDate = new Date(currentDate);
         newDate.setMonth(newDate.getMonth() + increment);
         setCurrentDate(newDate);
+    }
+
+    async function startDM() {
+        if (!employee || !currentUser) return;
+        setLoadingDM(true);
+        try {
+            // 1. Check if DM already exists
+            const { data: existing, error: fetchError } = await supabase
+                .from('chat_channels')
+                .select('id')
+                .eq('type', 'dm')
+                .or(`and(participant_a.eq.${currentUser.id},participant_b.eq.${employee.id}),and(participant_a.eq.${employee.id},participant_b.eq.${currentUser.id})`)
+                .maybeSingle();
+
+            if (fetchError) throw fetchError;
+
+            if (existing) {
+                onClose();
+                router.push(`/(app)/chat/${existing.id}`);
+                return;
+            }
+
+            // 2. If not, create it
+            // Always set participant_a as the smaller ID to maintain uniqueness if needed
+            const [pA, pB] = [currentUser.id, employee.id].sort();
+
+            const { data: newChannel, error: createError } = await supabase
+                .from('chat_channels')
+                .insert({
+                    name: `DM: ${currentUser.id} - ${employee.id}`,
+                    type: 'dm',
+                    participant_a: pA,
+                    participant_b: pB
+                })
+                .select('id')
+                .single();
+
+            if (createError) throw createError;
+
+            onClose();
+            router.push(`/(app)/chat/${newChannel.id}`);
+        } catch (err) {
+            console.error('Error starting DM:', err);
+        } finally {
+            setLoadingDM(false);
+        }
     }
 
     if (!employee) return null;
@@ -177,6 +229,25 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                         </View>
 
                         <Button title="Close" onPress={onClose} />
+
+                        {(employee.role === 'manager' || employee.role === 'admin' || employee.role === 'ceo' || employee.role === 'hr') && employee.id !== currentUser?.id && (
+                            <View style={{ marginTop: 12 }}>
+                                <TouchableOpacity
+                                    style={[styles.messageButton, loadingDM && { opacity: 0.7 }]}
+                                    onPress={startDM}
+                                    disabled={loadingDM}
+                                >
+                                    {loadingDM ? (
+                                        <ActivityIndicator color="white" size="small" />
+                                    ) : (
+                                        <>
+                                            <Ionicons name="chatbubble-ellipses" size={20} color="white" style={{ marginRight: 8 }} />
+                                            <Text style={styles.messageButtonText}>Message {employee.first_name}</Text>
+                                        </>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
+                        )}
                     </ScrollView>
                 </View>
             </View>
@@ -320,5 +391,19 @@ const styles = StyleSheet.create({
         fontSize: 11,
         color: '#666',
         textAlign: 'center',
+    },
+    messageButton: {
+        backgroundColor: '#4caf50',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 14,
+        borderRadius: 12,
+        marginTop: 8,
+    },
+    messageButtonText: {
+        color: 'white',
+        fontWeight: 'bold',
+        fontSize: 16,
     },
 });

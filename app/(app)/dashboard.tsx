@@ -194,6 +194,12 @@ export default function Dashboard() {
                     <Button title="View Payslips" onPress={() => router.push('/(app)/payslips')} />
                 </View>
 
+                <View style={styles.actionCard}>
+                    <Text style={styles.actionTitle}>💬 Messages</Text>
+                    <Text style={styles.actionDescription}>Chat with your team or leadership</Text>
+                    <Button title="Open Chat" onPress={() => router.push('/(app)/chat')} />
+                </View>
+
                 {/* Manager/Admin Actions */}
                 {(isAdmin || isManager || isHR) && (
                     <>
