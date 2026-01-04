@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import EditEmployeeModal from '../../src/components/EditEmployeeModal';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 import { ModernCard } from '../../src/components/ModernCard';
+import { useRouter } from 'expo-router';
 
 type Employee = {
     id: string;
@@ -31,6 +33,10 @@ type Department = {
 
 export default function Employees() {
     const { user } = useAuth();
+    const { theme, isDark } = useTheme();
+    const router = useRouter();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(true);
@@ -203,20 +209,20 @@ export default function Employees() {
     if (loading) {
         return (
             <View style={styles.center}>
-                <ActivityIndicator size="large" color={THEME.colors.primary} />
+                <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+                    <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
                 </TouchableOpacity>
                 <TouchableOpacity
-                    style={[styles.inviteToggle, { backgroundColor: showInviteForm ? THEME.colors.error : THEME.colors.primary }]}
+                    style={[styles.inviteToggle, { backgroundColor: showInviteForm ? theme.colors.error : theme.colors.primary }]}
                     onPress={() => setShowInviteForm(!showInviteForm)}
                 >
                     <Ionicons name={showInviteForm ? "close" : "person-add"} size={20} color="white" />
@@ -230,12 +236,12 @@ export default function Employees() {
                         <Text style={styles.sectionHeading}>Invitation Details</Text>
                         <View style={styles.inputGroup}>
                             <View style={styles.row}>
-                                <TextInput style={[styles.input, styles.half]} placeholder="First Name *" value={firstName} onChangeText={setFirstName} />
-                                <TextInput style={[styles.input, styles.half]} placeholder="Last Name *" value={lastName} onChangeText={setLastName} />
+                                <TextInput style={[styles.input, styles.half]} placeholder="First Name *" value={firstName} onChangeText={setFirstName} placeholderTextColor={theme.colors.text.muted} />
+                                <TextInput style={[styles.input, styles.half]} placeholder="Last Name *" value={lastName} onChangeText={setLastName} placeholderTextColor={theme.colors.text.muted} />
                             </View>
-                            <TextInput style={styles.input} placeholder="Email Address *" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-                            <TextInput style={styles.input} placeholder="Job Title *" value={jobTitle} onChangeText={setJobTitle} />
-                            <TextInput style={styles.input} placeholder="Base Salary *" value={baseSalary} onChangeText={setBaseSalary} keyboardType="numeric" />
+                            <TextInput style={styles.input} placeholder="Email Address *" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor={theme.colors.text.muted} />
+                            <TextInput style={styles.input} placeholder="Job Title *" value={jobTitle} onChangeText={setJobTitle} placeholderTextColor={theme.colors.text.muted} />
+                            <TextInput style={styles.input} placeholder="Base Salary *" value={baseSalary} onChangeText={setBaseSalary} keyboardType="numeric" placeholderTextColor={theme.colors.text.muted} />
                         </View>
 
                         <Text style={styles.fieldLabel}>Role</Text>
@@ -255,16 +261,17 @@ export default function Employees() {
 
                 <View style={styles.listHeader}>
                     <View style={styles.searchBox}>
-                        <Ionicons name="search" size={18} color={THEME.colors.text.muted} />
+                        <Ionicons name="search" size={18} color={theme.colors.text.muted} />
                         <TextInput
                             style={styles.searchField}
                             placeholder="Find member..."
                             value={searchQuery}
                             onChangeText={setSearchQuery}
+                            placeholderTextColor={theme.colors.text.muted}
                         />
                     </View>
                     <TouchableOpacity onPress={() => setShowInactive(!showInactive)} style={styles.filterBtn}>
-                        <Ionicons name={showInactive ? "eye" : "eye-off"} size={20} color={THEME.colors.primary} />
+                        <Ionicons name={showInactive ? "eye" : "eye-off"} size={20} color={theme.colors.primary} />
                     </TouchableOpacity>
                 </View>
 
@@ -278,29 +285,29 @@ export default function Employees() {
                                 <Text style={styles.empName}>{emp.first_name} {emp.last_name}</Text>
                                 <Text style={styles.empTitle}>{emp.job_title || 'Team Member'}</Text>
                                 <View style={styles.roleTag}>
-                                    <View style={[styles.dot, { backgroundColor: emp.is_active ? THEME.colors.success : THEME.colors.error }]} />
+                                    <View style={[styles.dot, { backgroundColor: emp.is_active ? theme.colors.success : theme.colors.error }]} />
                                     <Text style={styles.roleTagText}>{emp.role.toUpperCase()}</Text>
                                 </View>
                             </View>
                             <View style={styles.empActions}>
                                 <TouchableOpacity onPress={() => { setEditingEmployee(emp); setShowEditModal(true); }} style={styles.actionIcon}>
-                                    <Ionicons name="create-outline" size={20} color={THEME.colors.primary} />
+                                    <Ionicons name="create-outline" size={20} color={theme.colors.primary} />
                                 </TouchableOpacity>
                                 {emp.is_active && (
                                     <TouchableOpacity onPress={() => removeEmployee(emp.id, `${emp.first_name} ${emp.last_name}`)} style={styles.actionIcon}>
-                                        <Ionicons name="trash-outline" size={20} color={THEME.colors.error} />
+                                        <Ionicons name="trash-outline" size={20} color={theme.colors.error} />
                                     </TouchableOpacity>
                                 )}
                             </View>
                         </View>
                         <View style={styles.cardFooter}>
                             <View style={styles.footerItem}>
-                                <Ionicons name="mail-outline" size={14} color={THEME.colors.text.muted} />
+                                <Ionicons name="mail-outline" size={14} color={theme.colors.text.muted} />
                                 <Text style={styles.footerText}>{emp.email}</Text>
                             </View>
                             {emp.team && (
                                 <View style={styles.footerItem}>
-                                    <Ionicons name="business-outline" size={14} color={THEME.colors.text.muted} />
+                                    <Ionicons name="business-outline" size={14} color={theme.colors.text.muted} />
                                     <Text style={styles.footerText}>{emp.team.name}</Text>
                                 </View>
                             )}
@@ -320,49 +327,49 @@ export default function Employees() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: THEME.colors.background },
-    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: THEME.spacing.lg, backgroundColor: 'white' },
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: theme.spacing.lg, backgroundColor: theme.colors.card },
     backBtn: { padding: 8, marginLeft: -8 },
-    title: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary },
+    title: { fontSize: 24, fontWeight: 'bold', color: theme.colors.text.primary },
     inviteToggle: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, gap: 6 },
     inviteToggleText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
-    scrollContent: { padding: THEME.spacing.lg },
-    formCard: { padding: THEME.spacing.lg, marginBottom: THEME.spacing.xl },
-    sectionHeading: { fontSize: 18, fontWeight: '700', marginBottom: 16, color: THEME.colors.text.primary },
+    scrollContent: { padding: theme.spacing.lg },
+    formCard: { padding: theme.spacing.lg, marginBottom: theme.spacing.xl, backgroundColor: theme.colors.card },
+    sectionHeading: { fontSize: 18, fontWeight: '700', marginBottom: 16, color: theme.colors.text.primary },
     inputGroup: { gap: 12 },
-    input: { backgroundColor: '#f8f9fa', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#eee', fontSize: 15 },
+    input: { backgroundColor: theme.colors.background, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: theme.colors.border, fontSize: 15, color: theme.colors.text.primary },
     row: { flexDirection: 'row', gap: 12 },
     half: { flex: 1 },
-    fieldLabel: { fontSize: 14, fontWeight: '600', color: THEME.colors.text.secondary, marginTop: 16, marginBottom: 8 },
+    fieldLabel: { fontSize: 14, fontWeight: '600', color: theme.colors.text.secondary, marginTop: 16, marginBottom: 8 },
     tabContainer: { flexDirection: 'row', gap: 8, flexWrap: 'wrap' },
-    tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#f0f0f0' },
-    activeTab: { backgroundColor: THEME.colors.primary },
-    tabText: { fontSize: 12, fontWeight: 'bold', color: THEME.colors.text.secondary },
+    tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border },
+    activeTab: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+    tabText: { fontSize: 12, fontWeight: 'bold', color: theme.colors.text.secondary },
     activeTabText: { color: 'white' },
-    submitBtn: { backgroundColor: THEME.colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 24 },
+    submitBtn: { backgroundColor: theme.colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 24 },
     submitBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
     listHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
-    searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: 'white', borderRadius: 12, paddingHorizontal: 16, height: 48, borderWidth: 1, borderColor: '#eee' },
-    searchField: { flex: 1, marginLeft: 10, fontSize: 15 },
-    filterBtn: { width: 48, height: 48, backgroundColor: 'white', borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: '#eee' },
-    employeeCard: { padding: 16, marginBottom: 12 },
+    searchBox: { flex: 1, flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 12, paddingHorizontal: 16, height: 48, borderWidth: 1, borderColor: theme.colors.border },
+    searchField: { flex: 1, marginLeft: 10, fontSize: 15, color: theme.colors.text.primary },
+    filterBtn: { width: 48, height: 48, backgroundColor: theme.colors.card, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
+    employeeCard: { padding: 16, marginBottom: 12, backgroundColor: theme.colors.card },
     cardMain: { flexDirection: 'row', alignItems: 'center' },
-    empAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: THEME.colors.primary, justifyContent: 'center', alignItems: 'center' },
+    empAvatar: { width: 48, height: 48, borderRadius: 24, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center' },
     empAvatarText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
     empInfo: { flex: 1, marginLeft: 16 },
-    empName: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
-    empTitle: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 2 },
+    empName: { fontSize: 16, fontWeight: 'bold', color: theme.colors.text.primary },
+    empTitle: { fontSize: 13, color: theme.colors.text.secondary, marginTop: 2 },
     roleTag: { flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 },
     dot: { width: 6, height: 6, borderRadius: 3 },
-    roleTagText: { fontSize: 10, fontWeight: 'bold', color: THEME.colors.text.muted },
+    roleTagText: { fontSize: 10, fontWeight: 'bold', color: theme.colors.text.muted },
     empActions: { flexDirection: 'row', gap: 8 },
-    actionIcon: { padding: 8, backgroundColor: '#f5f5f5', borderRadius: 10 },
-    cardFooter: { flexDirection: 'row', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: '#f0f0f0', gap: 16 },
+    actionIcon: { padding: 8, backgroundColor: theme.colors.background, borderRadius: 10 },
+    cardFooter: { flexDirection: 'row', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, gap: 16 },
     footerItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    footerText: { fontSize: 12, color: THEME.colors.text.muted },
+    footerText: { fontSize: 12, color: theme.colors.text.muted },
     inactiveCard: { opacity: 0.6 },
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center' }
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }
 });
 
 

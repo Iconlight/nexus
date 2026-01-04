@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, RefreshControl } from 'react-native';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../src/context/ThemeContext';
 import { THEME } from '../../src/constants/Theme';
 import { ModernCard } from '../../src/components/ModernCard';
 import { useRouter } from 'expo-router';
@@ -26,6 +27,9 @@ type LeaveRequest = {
 export default function Approvals() {
     const { user } = useAuth();
     const router = useRouter();
+    const { theme, isDark } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     const [requests, setRequests] = useState<LeaveRequest[]>([]);
     const [loading, setLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
@@ -40,7 +44,7 @@ export default function Approvals() {
         try {
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('company_id, role')
+                .select('company_id, role, department_id')
                 .eq('id', user?.id)
                 .single();
 
@@ -50,18 +54,29 @@ export default function Approvals() {
                 .from('leave_requests')
                 .select(`
                     *,
-                    profiles!leave_requests_employee_id_fkey (
+                    profiles!leave_requests_employee_id_fkey!inner (
                         first_name,
                         last_name,
-                        email
+                        email,
+                        department_id
                     )
                 `)
                 .eq('company_id', profile.company_id)
                 .order('created_at', { ascending: false });
 
+            // If manager, filter by department
+            if (profile.role === 'manager' && profile.department_id) {
+                // We use the inner join filter
+                query = query.eq('profiles.department_id', profile.department_id);
+            }
+
             if (filter === 'pending') {
                 query = query.eq('status', 'pending');
             }
+
+            // If not manager or admin/ceo/hr, maybe shouldn't see anything? 
+            // Assuming current page is protected or role check handles it.
+            // But strict RLS is better. For now, trusting query.
 
             const { data, error } = await query;
             if (error) throw error;
@@ -125,7 +140,7 @@ export default function Approvals() {
                 'Enter rejection reason (optional):',
                 [
                     { text: 'Cancel', style: 'cancel' },
-                    { text: 'Reject', style: 'destructive', onPress: (reason) => processRejection(requestId, reason || '') },
+                    { text: 'Reject', style: 'destructive', onPress: (reason?: string) => processRejection(requestId, reason || '') },
                 ]
             );
         }
@@ -156,20 +171,21 @@ export default function Approvals() {
     if (loading) {
         return (
             <View style={styles.center}>
-                <ActivityIndicator size="large" color={THEME.colors.primary} />
+                <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
             <View style={styles.header}>
                 <View style={styles.headerTop}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Ionicons name="chevron-back" size={28} color={THEME.colors.text.primary} />
+                        <Ionicons name="chevron-back" size={28} color={theme.colors.text.primary} />
                     </TouchableOpacity>
+                    <Text style={styles.title}>Leave Approvals</Text>
                 </View>
 
                 <View style={styles.filterContainer}>
@@ -190,11 +206,11 @@ export default function Approvals() {
 
             <ScrollView
                 contentContainerStyle={styles.scrollContent}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.colors.primary} />}
             >
                 {requests.length === 0 ? (
                     <View style={styles.emptyState}>
-                        <Ionicons name="checkmark-done-circle-outline" size={72} color={THEME.colors.success + '40'} />
+                        <Ionicons name="checkmark-done-circle-outline" size={72} color={theme.colors.success + '40'} />
                         <Text style={styles.emptyText}>No {filter === 'pending' ? 'pending' : ''} requests found</Text>
                     </View>
                 ) : (
@@ -229,7 +245,7 @@ export default function Approvals() {
 
                             <View style={styles.detailsGroup}>
                                 <View style={styles.typeRow}>
-                                    <Ionicons name="calendar-outline" size={16} color={THEME.colors.primary} />
+                                    <Ionicons name="calendar-outline" size={16} color={theme.colors.primary} />
                                     <Text style={styles.leaveType}>{req.leave_type.toUpperCase()} LEAVE</Text>
                                 </View>
                                 <Text style={styles.dates}>
@@ -284,52 +300,52 @@ export default function Approvals() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: THEME.colors.background },
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    header: { backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border },
-    headerTop: { flexDirection: 'row', alignItems: 'center', padding: THEME.spacing.lg },
+    header: { backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    headerTop: { flexDirection: 'row', alignItems: 'center', padding: 16 },
     backBtn: { padding: 4 },
-    title: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary, marginLeft: 12 },
-    filterContainer: { flexDirection: 'row', paddingHorizontal: THEME.spacing.lg, paddingBottom: 12, gap: 12 },
-    filterBtn: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: '#f0f2f5', borderWidth: 1, borderColor: 'transparent' },
-    filterBtnActive: { backgroundColor: THEME.colors.primary + '15', borderColor: THEME.colors.primary },
-    filterText: { fontSize: 13, color: THEME.colors.text.secondary, fontWeight: '600' },
-    filterTextActive: { color: THEME.colors.primary },
-    scrollContent: { padding: THEME.spacing.lg },
+    title: { fontSize: 24, fontWeight: 'bold', color: theme.colors.text.primary, marginLeft: 12 },
+    filterContainer: { flexDirection: 'row', paddingHorizontal: 16, paddingBottom: 12, gap: 12 },
+    filterBtn: { paddingVertical: 8, paddingHorizontal: 20, borderRadius: 20, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border },
+    filterBtnActive: { backgroundColor: theme.colors.primary + '15', borderColor: theme.colors.primary },
+    filterText: { fontSize: 13, color: theme.colors.text.secondary, fontWeight: '600' },
+    filterTextActive: { color: theme.colors.primary },
+    scrollContent: { padding: 16 },
     emptyState: { alignItems: 'center', marginTop: 80, gap: 16 },
-    emptyText: { fontSize: 16, color: THEME.colors.text.muted, fontWeight: '500' },
+    emptyText: { fontSize: 16, color: theme.colors.text.muted, fontWeight: '500' },
     requestCard: { padding: 16, marginBottom: 16 },
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     userInfo: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-    avatarMini: { width: 44, height: 44, borderRadius: 22, backgroundColor: THEME.colors.primary + '10', justifyContent: 'center', alignItems: 'center' },
-    avatarTextMini: { color: THEME.colors.primary, fontWeight: 'bold', fontSize: 18 },
-    employeeName: { fontSize: 17, fontWeight: 'bold', color: THEME.colors.text.primary },
-    employeeEmail: { fontSize: 12, color: THEME.colors.text.muted, marginTop: 2 },
+    avatarMini: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.primary + '10', justifyContent: 'center', alignItems: 'center' },
+    avatarTextMini: { color: theme.colors.primary, fontWeight: 'bold', fontSize: 18 },
+    employeeName: { fontSize: 17, fontWeight: 'bold', color: theme.colors.text.primary },
+    employeeEmail: { fontSize: 12, color: theme.colors.text.muted, marginTop: 2 },
     statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
     statusText: { fontSize: 10, fontWeight: 'bold' },
     pendingBadge: { backgroundColor: '#FFF3E0' },
     pendingText: { color: '#E65100' },
-    approvedBadge: { backgroundColor: THEME.colors.success + '15' },
-    approvedText: { color: THEME.colors.success },
-    rejectedBadge: { backgroundColor: THEME.colors.error + '10' },
-    rejectedText: { color: THEME.colors.error },
-    divider: { height: 1, backgroundColor: THEME.colors.border, marginVertical: 16 },
+    approvedBadge: { backgroundColor: theme.colors.success + '15' },
+    approvedText: { color: theme.colors.success },
+    rejectedBadge: { backgroundColor: theme.colors.error + '10' },
+    rejectedText: { color: theme.colors.error },
+    divider: { height: 1, backgroundColor: theme.colors.border, marginVertical: 16 },
     detailsGroup: { gap: 12 },
     typeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    leaveType: { fontSize: 12, fontWeight: 'bold', color: THEME.colors.primary, letterSpacing: 0.5 },
-    dates: { fontSize: 16, fontWeight: '700', color: THEME.colors.text.primary },
-    reasonBox: { backgroundColor: '#F8F9FA', padding: 12, borderRadius: 12 },
-    reasonLabel: { fontSize: 9, fontWeight: 'bold', color: THEME.colors.text.muted, marginBottom: 4 },
-    reasonText: { fontSize: 13, color: THEME.colors.text.secondary, lineHeight: 18 },
-    rejectionBox: { backgroundColor: THEME.colors.error + '05', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: THEME.colors.error + '10' },
-    rejectionLabel: { fontSize: 9, fontWeight: 'bold', color: THEME.colors.error, marginBottom: 4 },
-    rejectionText: { fontSize: 13, color: THEME.colors.error, fontStyle: 'italic' },
-    timestamp: { fontSize: 11, color: THEME.colors.text.muted, marginTop: 8 },
+    leaveType: { fontSize: 12, fontWeight: 'bold', color: theme.colors.primary, letterSpacing: 0.5 },
+    dates: { fontSize: 16, fontWeight: '700', color: theme.colors.text.primary },
+    reasonBox: { backgroundColor: theme.colors.background, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border },
+    reasonLabel: { fontSize: 9, fontWeight: 'bold', color: theme.colors.text.muted, marginBottom: 4 },
+    reasonText: { fontSize: 13, color: theme.colors.text.secondary, lineHeight: 18 },
+    rejectionBox: { backgroundColor: theme.colors.error + '05', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.error + '10' },
+    rejectionLabel: { fontSize: 9, fontWeight: 'bold', color: theme.colors.error, marginBottom: 4 },
+    rejectionText: { fontSize: 13, color: theme.colors.error, fontStyle: 'italic' },
+    timestamp: { fontSize: 11, color: theme.colors.text.muted, marginTop: 8 },
     actionRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
     actionBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-    rejectBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: THEME.colors.error },
-    rejectBtnText: { color: THEME.colors.error, fontWeight: 'bold' },
-    approveBtn: { backgroundColor: THEME.colors.success },
+    rejectBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.colors.error },
+    rejectBtnText: { color: theme.colors.error, fontWeight: 'bold' },
+    approveBtn: { backgroundColor: theme.colors.success },
     approveBtnText: { color: 'white', fontWeight: 'bold' }
 });

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 import { THEME } from '../constants/Theme';
 import { ModernCard } from './ModernCard';
 
@@ -12,6 +13,7 @@ interface ActivityCardProps {
     color: string;
     progress?: number;
     onPress?: () => void;
+    alert?: boolean;
 }
 
 export const ActivityCard: React.FC<ActivityCardProps> = ({
@@ -21,8 +23,12 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
     icon,
     color,
     progress,
-    onPress
+    onPress,
+    alert
 }) => {
+    const { theme } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     return (
         <TouchableOpacity
             activeOpacity={0.7}
@@ -33,8 +39,15 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
             <ModernCard style={styles.card}>
                 <View style={styles.header}>
                     <Text style={styles.title}>{title}</Text>
-                    <View style={[styles.iconBox, { backgroundColor: `${color}15` }]}>
-                        <Ionicons name={icon} size={20} color={color} />
+                    <View>
+                        <View style={[styles.iconBox, { backgroundColor: `${color}15` }]}>
+                            <Ionicons name={icon} size={20} color={color} />
+                        </View>
+                        {alert && (
+                            <View style={styles.alertBadge}>
+                                <View style={styles.alertDot} />
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -56,10 +69,10 @@ export const ActivityCard: React.FC<ActivityCardProps> = ({
     );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     cardContainer: {
         width: '48%',
-        marginBottom: THEME.spacing.md,
+        marginBottom: theme.spacing.md,
     },
     card: {
         height: 140,
@@ -74,11 +87,25 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 14,
         fontWeight: '600',
-        color: THEME.colors.text.secondary,
+        color: theme.colors.text.secondary,
     },
     iconBox: {
         padding: 6,
         borderRadius: 12,
+    },
+    alertBadge: {
+        position: 'absolute',
+        top: -2,
+        right: -2,
+        backgroundColor: theme.colors.background,
+        borderRadius: 6,
+        padding: 2,
+    },
+    alertDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        backgroundColor: theme.colors.error,
     },
     bottom: {
         gap: 8,
@@ -86,11 +113,11 @@ const styles = StyleSheet.create({
     value: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     unit: {
         fontSize: 12,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
     },
     miniProgress: {
         height: 6,

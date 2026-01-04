@@ -1,11 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../src/context/ThemeContext';
 import { THEME } from '../../src/constants/Theme';
 import { ModernCard } from '../../src/components/ModernCard';
+import { useRouter } from 'expo-router';
 
 type LeaveRequest = {
   id: string;
@@ -19,6 +21,10 @@ type LeaveRequest = {
 
 export default function Leave() {
   const { user } = useAuth();
+  const router = useRouter();
+  const { theme, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const [requests, setRequests] = useState<LeaveRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -100,20 +106,20 @@ export default function Leave() {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color={THEME.colors.primary} />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.formBtn, { backgroundColor: showForm ? THEME.colors.error : THEME.colors.primary }]}
+          style={[styles.formBtn, { backgroundColor: showForm ? theme.colors.error : theme.colors.primary }]}
           onPress={() => setShowForm(!showForm)}
         >
           <Ionicons name={showForm ? "close" : "add"} size={22} color="white" />
@@ -144,11 +150,11 @@ export default function Leave() {
             <View style={styles.inputRow}>
               <View style={styles.inputWrap}>
                 <Text style={styles.label}>Start Date</Text>
-                <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={startDate} onChangeText={setStartDate} />
+                <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.text.muted} value={startDate} onChangeText={setStartDate} />
               </View>
               <View style={styles.inputWrap}>
                 <Text style={styles.label}>End Date</Text>
-                <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={endDate} onChangeText={setEndDate} />
+                <TextInput style={styles.input} placeholder="YYYY-MM-DD" placeholderTextColor={theme.colors.text.muted} value={endDate} onChangeText={setEndDate} />
               </View>
             </View>
 
@@ -156,6 +162,7 @@ export default function Leave() {
             <TextInput
               style={[styles.input, styles.textArea]}
               placeholder="Why do you need leave?"
+              placeholderTextColor={theme.colors.text.muted}
               value={reason}
               onChangeText={setReason}
               multiline
@@ -164,7 +171,7 @@ export default function Leave() {
 
             {leaveType === 'sick' && (
               <TouchableOpacity style={styles.uploadBtn} onPress={pickDocument}>
-                <Ionicons name="cloud-upload-outline" size={20} color={THEME.colors.primary} />
+                <Ionicons name="cloud-upload-outline" size={20} color={theme.colors.primary} />
                 <Text style={styles.uploadBtnText}>{document ? document.name : "Upload Certificate"}</Text>
               </TouchableOpacity>
             )}
@@ -178,7 +185,7 @@ export default function Leave() {
         <Text style={styles.sectionTitle}>Your History</Text>
         {requests.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="calendar-outline" size={64} color={THEME.colors.text.muted} />
+            <Ionicons name="calendar-outline" size={64} color={theme.colors.text.muted} />
             <Text style={styles.emptyText}>No requests yet</Text>
           </View>
         ) : (
@@ -206,7 +213,7 @@ export default function Leave() {
 
               <View style={styles.cardFooter}>
                 <Text style={styles.footerDate}>Submitted {new Date(req.created_at).toLocaleDateString()}</Text>
-                {req.status === 'pending' && <Ionicons name="time-outline" size={14} color={THEME.colors.warning} />}
+                {req.status === 'pending' && <Ionicons name="time-outline" size={14} color={theme.colors.warning} />}
               </View>
             </ModernCard>
           ))
@@ -216,48 +223,45 @@ export default function Leave() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.colors.background },
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  header: { padding: THEME.spacing.lg, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  header: { padding: 16, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   backBtn: { padding: 8, marginLeft: -8 },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary },
-  headerSub: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 2 },
   formBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, gap: 6 },
   formBtnText: { color: 'white', fontWeight: 'bold', fontSize: 13 },
-  scrollContent: { padding: THEME.spacing.lg },
+  scrollContent: { padding: 16 },
   formCard: { padding: 20, marginBottom: 24 },
-  formTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, color: THEME.colors.text.primary },
-  label: { fontSize: 13, fontWeight: '600', color: THEME.colors.text.secondary, marginBottom: 8, marginTop: 4 },
+  formTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 20, color: theme.colors.text.primary },
+  label: { fontSize: 13, fontWeight: '600', color: theme.colors.text.secondary, marginBottom: 8, marginTop: 4 },
   typeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
-  typeBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#F0F2F5', borderWidth: 1, borderColor: '#eee' },
-  typeBtnActive: { backgroundColor: THEME.colors.primary, borderColor: THEME.colors.primary },
-  typeBtnText: { fontSize: 12, color: THEME.colors.text.secondary, fontWeight: '600' },
+  typeBtn: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border },
+  typeBtnActive: { backgroundColor: theme.colors.primary, borderColor: theme.colors.primary },
+  typeBtnText: { fontSize: 12, color: theme.colors.text.secondary, fontWeight: '600' },
   typeBtnTextActive: { color: 'white' },
   inputRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   inputWrap: { flex: 1 },
-  input: { backgroundColor: '#f8f9fa', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#eee', fontSize: 15 },
+  input: { backgroundColor: theme.colors.background, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: theme.colors.border, fontSize: 15, color: theme.colors.text.primary },
   textArea: { height: 80, textAlignVertical: 'top' },
-  uploadBtn: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: THEME.colors.primary, borderStyle: 'dashed', marginTop: 16, gap: 10, backgroundColor: '#f0f7ff' },
-  uploadBtnText: { color: THEME.colors.primary, fontWeight: '600', fontSize: 14 },
-  submitBtn: { backgroundColor: THEME.colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 24 },
+  uploadBtn: { flexDirection: 'row', alignItems: 'center', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.primary, borderStyle: 'dashed', marginTop: 16, gap: 10, backgroundColor: theme.colors.primary + '10' },
+  uploadBtnText: { color: theme.colors.primary, fontWeight: '600', fontSize: 14 },
+  submitBtn: { backgroundColor: theme.colors.primary, padding: 16, borderRadius: 16, alignItems: 'center', marginTop: 24 },
   submitBtnText: { color: 'white', fontWeight: 'bold', fontSize: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: THEME.colors.text.primary },
+  sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: theme.colors.text.primary },
   requestCard: { padding: 16, marginBottom: 16 },
   cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  typeBadge: { backgroundColor: '#E3F2FD', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  typeBadgeText: { fontSize: 10, fontWeight: 'bold', color: THEME.colors.primary },
-  statusBadge: { backgroundColor: '#FFF3E0', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusApproved: { backgroundColor: '#E8F5E9' },
-  statusRejected: { backgroundColor: '#FFEBEE' },
-  statusText: { fontSize: 10, fontWeight: '800', color: '#E65100' },
-  statusTextApproved: { color: '#2E7D32' },
-  statusTextRejected: { color: '#C62828' },
-  reqDates: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary, marginBottom: 6 },
-  reqReason: { fontSize: 13, color: THEME.colors.text.secondary, lineHeight: 18, marginBottom: 12 },
-  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  footerDate: { fontSize: 11, color: THEME.colors.text.muted },
+  typeBadge: { backgroundColor: theme.colors.primary + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+  typeBadgeText: { fontSize: 10, fontWeight: 'bold', color: theme.colors.primary },
+  statusBadge: { backgroundColor: theme.colors.warning + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  statusApproved: { backgroundColor: theme.colors.success + '20' },
+  statusRejected: { backgroundColor: theme.colors.error + '20' },
+  statusText: { fontSize: 10, fontWeight: '800', color: theme.colors.warning },
+  statusTextApproved: { color: theme.colors.success },
+  statusTextRejected: { color: theme.colors.error },
+  reqDates: { fontSize: 16, fontWeight: 'bold', color: theme.colors.text.primary, marginBottom: 6 },
+  reqReason: { fontSize: 13, color: theme.colors.text.secondary, lineHeight: 18, marginBottom: 12 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border },
+  footerDate: { fontSize: 11, color: theme.colors.text.muted },
   emptyState: { alignItems: 'center', marginTop: 60 },
-  emptyText: { fontSize: 16, color: THEME.colors.text.muted, marginTop: 12 }
+  emptyText: { fontSize: 16, color: theme.colors.text.muted, marginTop: 12 }
 });
-

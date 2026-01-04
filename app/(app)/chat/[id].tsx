@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { View, Text, FlatList, TextInput, TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../src/services/supabase';
 import { useAuth } from '../../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../../src/context/ThemeContext';
 import { THEME } from '../../../src/constants/Theme';
 
 type Message = {
@@ -21,7 +22,9 @@ type Message = {
 export default function ChatRoom() {
     const { id: channelId } = useLocalSearchParams();
     const { user } = useAuth();
+    const { theme, isDark } = useTheme();
     const router = useRouter();
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
@@ -34,6 +37,7 @@ export default function ChatRoom() {
         if (!channelId) return;
         fetchChannelInfo();
         fetchMessages();
+        markAllAsRead();
 
         const channel = supabase.channel(`room:${channelId}`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages', filter: `channel_id=eq.${channelId}` }, (payload) => {
@@ -44,11 +48,35 @@ export default function ChatRoom() {
         return () => { supabase.removeChannel(channel); };
     }, [channelId]);
 
+    async function markAllAsRead() {
+        if (!user || !channelId) return;
+        const { error } = await supabase
+            .from('chat_messages')
+            .update({ is_read: true })
+            .eq('channel_id', channelId)
+            .neq('sender_id', user.id)
+            .eq('is_read', false);
+
+        if (error) console.error('Error marking read:', error);
+    }
+
     async function fetchChannelInfo() {
-        const { data } = await supabase.from('chat_channels').select('*, profiles_a(first_name, last_name), profiles_b(first_name, last_name)').eq('id', channelId).single();
+        const { data, error } = await supabase
+            .from('chat_channels')
+            .select('*, profiles_a:participant_a(first_name, last_name), profiles_b:participant_b(first_name, last_name)')
+            .eq('id', channelId)
+            .single();
+
+        if (error) {
+            console.error('Error fetching channel info:', error);
+            return;
+        }
+
         if (data) {
             if (data.type === 'dm') {
                 const partner = data.participant_a === user?.id ? data.profiles_b : data.profiles_a;
+                // Use a functional update or ensure this runs after mount.
+                // Actually partner structure: { first_name, last_name }
                 setChannelName(partner ? `${partner.first_name} ${partner.last_name}` : 'Direct Message');
             } else {
                 setChannelName(data.name);
@@ -77,13 +105,22 @@ export default function ChatRoom() {
     async function fetchNewMessage(messageId: string) {
         const { data } = await supabase.from('chat_messages').select('*, profiles(first_name, last_name)').eq('id', messageId).single();
         if (data) {
+            // Mark as read immediately if not mine
+            if (data.sender_id !== user?.id) {
+                supabase.from('chat_messages').update({ is_read: true }).eq('id', messageId).then();
+            }
+
             setMessages(prev => {
-                const optimisticIdx = prev.findIndex(m => m.status === 'sending' && m.content === data.content && m.sender_id === data.sender_id);
+                // Find optimistic message mainly by content and "sending" status
+                // We relax the check to ensure we find it
+                const optimisticIdx = prev.findIndex(m => m.status === 'sending' && m.content === data.content);
+
                 if (optimisticIdx !== -1) {
                     const newMsgs = [...prev];
                     newMsgs[optimisticIdx] = { ...data, status: 'sent' };
                     return newMsgs;
                 }
+                // Check if already exists by ID to avoid duplicates
                 if (prev.find(m => m.id === data.id)) return prev;
                 return [...prev, { ...data, status: 'sent' }];
             });
@@ -105,6 +142,9 @@ export default function ChatRoom() {
         try {
             const { error } = await supabase.from('chat_messages').insert({ channel_id: channelId, sender_id: user?.id, content: text });
             if (error) throw error;
+
+            // Manually mark as sent just in case subscription lags
+            setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'sent' } : m));
         } catch (error) {
             console.error('Send error:', error);
             setMessages(prev => prev.map(m => m.id === tempId ? { ...m, status: 'error' } : m));
@@ -137,8 +177,8 @@ export default function ChatRoom() {
     };
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: 'white' }}>
-            <StatusBar barStyle="dark-content" />
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -146,7 +186,7 @@ export default function ChatRoom() {
             >
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Ionicons name="chevron-back" size={28} color={THEME.colors.text.primary} />
+                        <Ionicons name="chevron-back" size={28} color={theme.colors.text.primary} />
                     </TouchableOpacity>
                     <View style={styles.headerInfo}>
                         <Text style={styles.headerTitle}>{channelName}</Text>
@@ -158,7 +198,7 @@ export default function ChatRoom() {
                 </View>
 
                 {loading ? (
-                    <View style={styles.center}><ActivityIndicator color={THEME.colors.primary} /></View>
+                    <View style={styles.center}><ActivityIndicator color={theme.colors.primary} /></View>
                 ) : (
                     <FlatList
                         ref={flatListRef}
@@ -177,7 +217,7 @@ export default function ChatRoom() {
                             value={inputText}
                             onChangeText={setInputText}
                             placeholder="Message..."
-                            placeholderTextColor={THEME.colors.text.muted}
+                            placeholderTextColor={theme.colors.text.muted}
                             multiline
                         />
                         <TouchableOpacity
@@ -196,33 +236,33 @@ export default function ChatRoom() {
     );
 }
 
-const styles = StyleSheet.create({
-    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: THEME.colors.border, backgroundColor: 'white' },
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border, backgroundColor: theme.colors.card },
     backBtn: { padding: 4 },
     headerInfo: { marginLeft: 12 },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: THEME.colors.text.primary },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.colors.text.primary },
     onlineStatus: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-    statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: THEME.colors.success, marginRight: 6 },
-    statusText: { fontSize: 12, color: THEME.colors.text.secondary },
+    statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.colors.success, marginRight: 6 },
+    statusText: { fontSize: 12, color: theme.colors.text.secondary },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     listContent: { padding: 16, paddingBottom: 24 },
     bubbleWrapper: { marginBottom: 16, maxWidth: '85%' },
     myWrapper: { alignSelf: 'flex-end' },
     otherWrapper: { alignSelf: 'flex-start' },
-    senderName: { fontSize: 12, fontWeight: '600', color: THEME.colors.text.secondary, marginBottom: 4, marginLeft: 12 },
+    senderName: { fontSize: 12, fontWeight: '600', color: theme.colors.text.secondary, marginBottom: 4, marginLeft: 12 },
     bubble: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 24 },
-    myBubble: { backgroundColor: THEME.colors.primary, borderBottomRightRadius: 4 },
-    otherBubble: { backgroundColor: '#F0F2F5', borderBottomLeftRadius: 4 },
+    myBubble: { backgroundColor: theme.colors.primary, borderBottomRightRadius: 4 },
+    otherBubble: { backgroundColor: theme.colors.border, borderBottomLeftRadius: 4 }, // Using border color or a specific surface color for other bubble
     messageText: { fontSize: 16, lineHeight: 22 },
     myText: { color: 'white' },
-    otherText: { color: THEME.colors.text.primary },
+    otherText: { color: theme.colors.text.primary },
     timestamp: { fontSize: 10, marginTop: 4, alignSelf: 'flex-end' },
     myTimestamp: { color: 'rgba(255,255,255,0.7)' },
-    otherTimestamp: { color: THEME.colors.text.muted },
-    inputContainer: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: THEME.colors.border, backgroundColor: 'white' },
-    inputInner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F2F5', borderRadius: 28, paddingHorizontal: 16, paddingVertical: 4 },
-    input: { flex: 1, paddingVertical: 10, fontSize: 16, color: THEME.colors.text.primary, maxHeight: 100 },
+    otherTimestamp: { color: theme.colors.text.muted },
+    inputContainer: { paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.card },
+    inputInner: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.background, borderRadius: 28, paddingHorizontal: 16, paddingVertical: 4, borderWidth: 1, borderColor: theme.colors.border },
+    input: { flex: 1, paddingVertical: 10, fontSize: 16, color: theme.colors.text.primary, maxHeight: 100 },
     sendBtn: { marginLeft: 8 },
-    sendIconBg: { width: 36, height: 36, borderRadius: 18, backgroundColor: THEME.colors.primary, justifyContent: 'center', alignItems: 'center' }
+    sendIconBg: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center' }
 });
 

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet, ViewStyle, ViewProps, StyleProp } from 'react-native';
-import { THEME } from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 
 interface ModernCardProps extends ViewProps {
     children: React.ReactNode;
@@ -9,11 +9,17 @@ interface ModernCardProps extends ViewProps {
 }
 
 export const ModernCard: React.FC<ModernCardProps> = ({ children, style, variant = 'soft', ...props }) => {
+    const { theme } = useTheme();
+
     return (
         <View
             style={[
-                styles.card,
-                variant === 'medium' ? THEME.shadows.medium : THEME.shadows.soft,
+                {
+                    backgroundColor: theme.colors.card,
+                    borderRadius: theme.borderRadius.lg,
+                    padding: theme.spacing.md,
+                },
+                variant === 'medium' ? theme.shadows.medium : theme.shadows.soft,
                 style
             ]}
             {...props}
@@ -22,11 +28,3 @@ export const ModernCard: React.FC<ModernCardProps> = ({ children, style, variant
         </View>
     );
 };
-
-const styles = StyleSheet.create({
-    card: {
-        backgroundColor: THEME.colors.card,
-        borderRadius: THEME.borderRadius.lg,
-        padding: THEME.spacing.md,
-    },
-});

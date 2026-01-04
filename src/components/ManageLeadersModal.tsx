@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, Alert, Platform, ActivityIndicator, ScrollView } from 'react-native';
 import { supabase } from '../services/supabase';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 import { THEME } from '../constants/Theme';
 import { ModernCard } from './ModernCard';
 
@@ -22,6 +23,9 @@ type ManageLeadersModalProps = {
 };
 
 export default function ManageLeadersModal({ visible, onClose, teamId, teamName, eligibleManagers, onUpdate }: ManageLeadersModalProps) {
+    const { theme } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     const [currentLeaders, setCurrentLeaders] = useState<Leader[]>([]);
     const [loading, setLoading] = useState(false);
 
@@ -150,7 +154,7 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
                             <Text style={styles.subtitle}>{teamName}</Text>
                         </View>
                         <TouchableOpacity onPress={onClose} style={styles.closeBtn}>
-                            <Ionicons name="close" size={24} color={THEME.colors.text.primary} />
+                            <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                         </TouchableOpacity>
                     </View>
 
@@ -174,7 +178,7 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
                                         onPress={() => removeLeader(item.id)}
                                         disabled={loading}
                                     >
-                                        <Ionicons name="trash-outline" size={18} color={THEME.colors.error} />
+                                        <Ionicons name="trash-outline" size={18} color={theme.colors.error} />
                                     </TouchableOpacity>
                                 </ModernCard>
                             ))
@@ -189,7 +193,7 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
                             availableManagers.map(item => (
                                 <ModernCard key={item.id} style={styles.userCard}>
                                     <View style={styles.userInfo}>
-                                        <View style={[styles.avatarMini, { backgroundColor: THEME.colors.info }]}>
+                                        <View style={[styles.avatarMini, { backgroundColor: theme.colors.info }]}>
                                             <Text style={styles.avatarTextMini}>{item.first_name[0]}</Text>
                                         </View>
                                         <View>
@@ -202,13 +206,13 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
                                         onPress={() => addLeader(item.id)}
                                         disabled={loading}
                                     >
-                                        <Ionicons name="add" size={20} color={THEME.colors.primary} />
+                                        <Ionicons name="add" size={20} color={theme.colors.primary} />
                                         <Text style={styles.addBtnText}>ADD</Text>
                                     </TouchableOpacity>
                                 </ModernCard>
                             ))
                         )}
-                        {loading && <ActivityIndicator style={{ marginTop: 20 }} color={THEME.colors.primary} />}
+                        {loading && <ActivityIndicator style={{ marginTop: 20 }} color={theme.colors.primary} />}
                         <View style={{ height: 20 }} />
                     </ScrollView>
                 </View>
@@ -217,7 +221,7 @@ export default function ManageLeadersModal({ visible, onClose, teamId, teamName,
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
@@ -225,7 +229,7 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     modalContent: {
-        backgroundColor: THEME.colors.background,
+        backgroundColor: theme.colors.card,
         borderRadius: 24,
         padding: 24,
         maxHeight: '85%',
@@ -244,37 +248,37 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 20,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     subtitle: {
         fontSize: 14,
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontWeight: '600',
         marginTop: 2,
     },
     closeBtn: {
         padding: 8,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.background,
         borderRadius: 12,
     },
     sectionHeader: {
         fontSize: 11,
         fontWeight: 'bold',
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginBottom: 12,
         letterSpacing: 1,
     },
     emptyBox: {
         padding: 20,
         alignItems: 'center',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: theme.colors.background,
         borderRadius: 16,
         borderWidth: 1,
-        borderColor: '#eee',
+        borderColor: theme.colors.border,
         borderStyle: 'dashed',
     },
     emptyText: {
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         fontSize: 13,
         fontStyle: 'italic',
     },
@@ -294,7 +298,7 @@ const styles = StyleSheet.create({
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
     },
@@ -306,16 +310,16 @@ const styles = StyleSheet.create({
     userName: {
         fontSize: 14,
         fontWeight: '600',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     userRole: {
         fontSize: 10,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginTop: 1,
     },
     removeBtn: {
         padding: 8,
-        backgroundColor: THEME.colors.error + '10',
+        backgroundColor: theme.colors.error + '10',
         borderRadius: 8,
     },
     addBtn: {
@@ -323,13 +327,13 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 12,
         paddingVertical: 6,
-        backgroundColor: THEME.colors.primary + '10',
+        backgroundColor: theme.colors.primary + '10',
         borderRadius: 8,
         gap: 4,
     },
     addBtnText: {
         fontSize: 11,
         fontWeight: 'bold',
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
     },
 });

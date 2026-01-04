@@ -1,4 +1,4 @@
-export const THEME = {
+export const LightTheme = {
     colors: {
         primary: '#7C4DFF', // Deep Purple
         secondary: '#651FFF',
@@ -47,3 +47,22 @@ export const THEME = {
         },
     }
 };
+
+export const DarkTheme = {
+    ...LightTheme,
+    colors: {
+        ...LightTheme.colors,
+        background: '#121212', // Dark background
+        card: '#1E1E1E', // Dark card
+        text: {
+            primary: '#E0E0E0',
+            secondary: '#B0BEC5',
+            muted: '#757575',
+            onPrimary: '#000000',
+        },
+        border: '#333333',
+    }
+};
+
+// Deprecated: Use useTheme() instead
+export const THEME = LightTheme;

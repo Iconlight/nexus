@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, FlatList, Alert, ActivityIndicator, Platform } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useAuth } from '../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../context/ThemeContext';
 import { THEME } from '../constants/Theme';
 import { ModernCard } from './ModernCard';
 
@@ -24,6 +25,9 @@ type AddMemberModalProps = {
 
 export default function AddMemberModal({ visible, onClose, teamId, onUpdate }: AddMemberModalProps) {
     const { user } = useAuth();
+    const { theme } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     const [employees, setEmployees] = useState<Employee[]>([]);
     const [loading, setLoading] = useState(false);
     const [addingId, setAddingId] = useState<string | null>(null);
@@ -101,17 +105,17 @@ export default function AddMemberModal({ visible, onClose, teamId, onUpdate }: A
                             <Text style={styles.subtitle}>Assign employees to department</Text>
                         </View>
                         <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                            <Ionicons name="close" size={24} color={THEME.colors.text.primary} />
+                            <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                         </TouchableOpacity>
                     </View>
 
                     {loading ? (
                         <View style={styles.loadingBox}>
-                            <ActivityIndicator size="large" color={THEME.colors.primary} />
+                            <ActivityIndicator size="large" color={theme.colors.primary} />
                         </View>
                     ) : employees.length === 0 ? (
                         <View style={styles.emptyContainer}>
-                            <Ionicons name="people-outline" size={48} color={THEME.colors.text.muted + '40'} />
+                            <Ionicons name="people-outline" size={48} color={theme.colors.text.muted + '40'} />
                             <Text style={styles.emptyText}>No available employees found</Text>
                         </View>
                     ) : (
@@ -136,10 +140,10 @@ export default function AddMemberModal({ visible, onClose, teamId, onUpdate }: A
                                         disabled={!!addingId}
                                     >
                                         {addingId === item.id ? (
-                                            <ActivityIndicator size="small" color={THEME.colors.primary} />
+                                            <ActivityIndicator size="small" color={theme.colors.primary} />
                                         ) : (
                                             <>
-                                                <Ionicons name="add" size={18} color={THEME.colors.primary} />
+                                                <Ionicons name="add" size={18} color={theme.colors.primary} />
                                                 <Text style={styles.addBtnText}>ADD</Text>
                                             </>
                                         )}
@@ -154,7 +158,7 @@ export default function AddMemberModal({ visible, onClose, teamId, onUpdate }: A
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
@@ -162,7 +166,7 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     modalContent: {
-        backgroundColor: 'white',
+        backgroundColor: theme.colors.card,
         borderRadius: 24,
         padding: 24,
         maxHeight: '80%',
@@ -181,16 +185,16 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     subtitle: {
         fontSize: 13,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginTop: 2,
     },
     closeBtn: {
         padding: 8,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.background,
         borderRadius: 12,
     },
     loadingBox: {
@@ -203,7 +207,7 @@ const styles = StyleSheet.create({
         gap: 12,
     },
     emptyText: {
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         fontSize: 15,
     },
     userCard: {
@@ -223,23 +227,23 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: THEME.colors.primary + '15',
+        backgroundColor: theme.colors.primary + '15',
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarTextMini: {
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontSize: 15,
         fontWeight: 'bold',
     },
     userName: {
         fontSize: 15,
         fontWeight: '600',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     userEmail: {
         fontSize: 11,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginTop: 1,
     },
     addBtn: {
@@ -247,7 +251,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         paddingHorizontal: 12,
         paddingVertical: 8,
-        backgroundColor: THEME.colors.primary + '10',
+        backgroundColor: theme.colors.primary + '10',
         borderRadius: 10,
         gap: 4,
         minWidth: 70,
@@ -259,6 +263,6 @@ const styles = StyleSheet.create({
     addBtnText: {
         fontSize: 11,
         fontWeight: 'bold',
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
     },
 });

@@ -1,14 +1,18 @@
-import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Platform, Alert, SafeAreaView, StatusBar, ActivityIndicator } from 'react-native';
-import { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, Platform, Alert, SafeAreaView, StatusBar, ActivityIndicator, Switch } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../src/context/ThemeContext';
 import { THEME } from '../../src/constants/Theme';
 import { ModernCard } from '../../src/components/ModernCard';
 
 export default function Settings() {
     const router = useRouter();
+    const { theme, isDark, toggleTheme } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [companyId, setCompanyId] = useState('');
@@ -174,7 +178,7 @@ export default function Settings() {
             <StatusBar barStyle="dark-content" />
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+                    <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
                 </TouchableOpacity>
                 <View style={{ width: 44 }} />
             </View>
@@ -186,8 +190,29 @@ export default function Settings() {
                     <Text style={styles.infoSub}>Organization Administrator Control</Text>
                 </View>
 
+                {/* Appearance Settings */}
                 <View style={styles.sectionHeader}>
-                    <Ionicons name="map-outline" size={20} color={THEME.colors.primary} />
+                    <Ionicons name="moon-outline" size={20} color={theme.colors.primary} />
+                    <Text style={styles.sectionTitle}>Appearance</Text>
+                </View>
+
+                <ModernCard style={styles.card}>
+                    <View style={styles.rowBetween}>
+                        <View>
+                            <Text style={styles.settingLabel}>Dark Mode</Text>
+                            <Text style={styles.settingDesc}>Enable dark theme for the application</Text>
+                        </View>
+                        <Switch
+                            value={isDark}
+                            onValueChange={toggleTheme}
+                            trackColor={{ false: '#e0e0e0', true: theme.colors.primary }}
+                            thumbColor={'white'}
+                        />
+                    </View>
+                </ModernCard>
+
+                <View style={styles.sectionHeader}>
+                    <Ionicons name="map-outline" size={20} color={theme.colors.primary} />
                     <Text style={styles.sectionTitle}>Geo-Fencing Settings</Text>
                 </View>
 
@@ -271,66 +296,69 @@ export default function Settings() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: THEME.colors.background },
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     header: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: THEME.spacing.lg,
-        paddingVertical: THEME.spacing.md,
-        backgroundColor: 'white',
+        paddingHorizontal: theme.spacing.lg,
+        paddingVertical: theme.spacing.md,
+        backgroundColor: theme.colors.card,
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
+        borderBottomColor: theme.colors.border,
     },
-    backBtn: { padding: 8, borderRadius: 12, backgroundColor: '#f8f9fa' },
-    headerTitle: { fontSize: 18, fontWeight: 'bold', color: THEME.colors.text.primary },
-    scrollContent: { padding: THEME.spacing.lg },
+    backBtn: { padding: 8, borderRadius: 12, backgroundColor: theme.colors.background },
+    headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.colors.text.primary },
+    scrollContent: { padding: theme.spacing.lg },
     infoBox: { marginBottom: 32 },
-    infoLabel: { fontSize: 13, color: THEME.colors.text.muted, fontWeight: '600', textTransform: 'uppercase' },
-    infoValue: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary, marginTop: 4 },
-    infoSub: { fontSize: 12, color: THEME.colors.primary, fontWeight: '500', marginTop: 4 },
+    infoLabel: { fontSize: 13, color: theme.colors.text.muted, fontWeight: '600', textTransform: 'uppercase' },
+    infoValue: { fontSize: 24, fontWeight: 'bold', color: theme.colors.text.primary, marginTop: 4 },
+    infoSub: { fontSize: 12, color: theme.colors.primary, fontWeight: '500', marginTop: 4 },
     sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
-    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
+    sectionTitle: { fontSize: 16, fontWeight: 'bold', color: theme.colors.text.primary },
     card: { padding: 20, marginBottom: 24 },
-    description: { fontSize: 14, color: THEME.colors.text.secondary, lineHeight: 20, marginBottom: 24 },
+    rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    settingLabel: { fontSize: 16, fontWeight: '600', color: theme.colors.text.primary, marginBottom: 4 },
+    settingDesc: { fontSize: 13, color: theme.colors.text.secondary },
+    description: { fontSize: 14, color: theme.colors.text.secondary, lineHeight: 20, marginBottom: 24 },
     captureBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary,
         padding: 16,
         borderRadius: 16,
         gap: 8,
         marginBottom: 24,
         elevation: 2,
-        shadowColor: THEME.colors.primary,
+        shadowColor: theme.colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 8,
     },
     captureBtnText: { color: 'white', fontWeight: 'bold', fontSize: 14 },
     inputGroup: { marginBottom: 20 },
-    label: { fontSize: 13, fontWeight: '600', color: THEME.colors.text.secondary, marginBottom: 8 },
-    input: { backgroundColor: '#f8f9fa', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#eee', fontSize: 15 },
+    label: { fontSize: 13, fontWeight: '600', color: theme.colors.text.secondary, marginBottom: 8 },
+    input: { backgroundColor: theme.colors.background, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: theme.colors.border, fontSize: 15, color: theme.colors.text.primary },
     radiusInputRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    unitBadge: { backgroundColor: '#eee', paddingHorizontal: 12, paddingVertical: 14, borderRadius: 12 },
-    unitText: { fontSize: 12, fontWeight: 'bold', color: THEME.colors.text.muted },
-    hint: { fontSize: 11, color: THEME.colors.text.muted, fontStyle: 'italic', marginTop: 6 },
-    previewBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: THEME.colors.primary + '10', padding: 10, borderRadius: 10, marginTop: 4 },
-    previewText: { fontSize: 12, color: THEME.colors.primary, fontWeight: '600' },
+    unitBadge: { backgroundColor: theme.colors.background, paddingHorizontal: 12, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border },
+    unitText: { fontSize: 12, fontWeight: 'bold', color: theme.colors.text.muted },
+    hint: { fontSize: 11, color: theme.colors.text.muted, fontStyle: 'italic', marginTop: 6 },
+    previewBox: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.colors.primary + '10', padding: 10, borderRadius: 10, marginTop: 4 },
+    previewText: { fontSize: 12, color: theme.colors.primary, fontWeight: '600' },
     saveBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: THEME.colors.success,
+        backgroundColor: theme.colors.success,
         padding: 18,
         borderRadius: 18,
         gap: 12,
         marginBottom: 40,
         elevation: 2,
-        shadowColor: THEME.colors.success,
+        shadowColor: theme.colors.success,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.2,
         shadowRadius: 8,

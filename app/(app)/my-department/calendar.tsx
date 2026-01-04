@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, TextInput, Button, Alert, ScrollView, Platform } from 'react-native';
+import { useState, useEffect, useMemo } from 'react';
+import { View, Text, StyleSheet, Modal, TextInput, Button, Alert, ScrollView, Platform, TouchableOpacity, StatusBar } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { supabase } from '../../../src/services/supabase';
 import { useAuth } from '../../../src/context/AuthContext';
+import { useTheme } from '../../../src/context/ThemeContext';
+import { THEME } from '../../../src/constants/Theme';
 
 type Activity = {
     id: string;
@@ -14,6 +16,9 @@ type Activity = {
 
 export default function DepartmentCalendar() {
     const { user } = useAuth();
+    const { theme, isDark } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     const [selectedDate, setSelectedDate] = useState('');
     const [activities, setActivities] = useState<Activity[]>([]);
     const [markedDates, setMarkedDates] = useState<any>({});
@@ -29,15 +34,14 @@ export default function DepartmentCalendar() {
     const [teamId, setTeamId] = useState<string | null>(null);
 
     useEffect(() => {
-        loadActivities();
-    }, []);
+        if (theme) {
+            loadActivities();
+        }
+    }, [theme]);
 
     async function loadActivities() {
         try {
             // 1. Get user's team (Manager or Member)
-            // Priority: Managed team > Assigned team
-            // For managers, we want the team they MANAGE.
-
             let targetTeamId = null;
 
             // Check if manager
@@ -80,7 +84,10 @@ export default function DepartmentCalendar() {
             // Mark dates
             const marks: any = {};
             data?.forEach(act => {
-                marks[act.date] = { marked: true, dotColor: '#2196f3' };
+                const dateKey = act.date && act.date.includes('T') ? act.date.split('T')[0] : act.date;
+                if (dateKey) {
+                    marks[dateKey] = { marked: true, dotColor: theme.colors.info };
+                }
             });
             setMarkedDates(marks);
 
@@ -133,17 +140,28 @@ export default function DepartmentCalendar() {
 
     return (
         <View style={styles.container}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             <Calendar
                 onDayPress={day => {
                     setSelectedDate(day.dateString);
                 }}
                 markedDates={{
                     ...markedDates,
-                    [selectedDate]: { ...markedDates[selectedDate], selected: true, selectedColor: '#2196f3' }
+                    [selectedDate]: { ...markedDates[selectedDate], selected: true, selectedColor: theme.colors.info }
                 }}
                 theme={{
-                    todayTextColor: '#2196f3',
-                    selectedDayBackgroundColor: '#2196f3',
+                    calendarBackground: theme.colors.card,
+                    textSectionTitleColor: theme.colors.text.secondary,
+                    selectedDayBackgroundColor: theme.colors.info,
+                    selectedDayTextColor: '#ffffff',
+                    todayTextColor: theme.colors.info,
+                    dayTextColor: theme.colors.text.primary,
+                    textDisabledColor: theme.colors.text.muted,
+                    dotColor: theme.colors.info,
+                    selectedDotColor: '#ffffff',
+                    arrowColor: theme.colors.info,
+                    monthTextColor: theme.colors.text.primary,
+                    indicatorColor: theme.colors.info,
                 }}
             />
 
@@ -153,7 +171,7 @@ export default function DepartmentCalendar() {
                         {selectedDate ? `Activities for ${selectedDate}` : 'Select a date'}
                     </Text>
                     {selectedDate && (
-                        <Button title="Add Activity" onPress={() => setModalVisible(true)} />
+                        <Button title="Add Activity" onPress={() => setModalVisible(true)} color={theme.colors.primary} />
                     )}
                 </View>
 
@@ -184,6 +202,7 @@ export default function DepartmentCalendar() {
                         <TextInput
                             style={styles.input}
                             placeholder="Title"
+                            placeholderTextColor={theme.colors.text.muted}
                             value={newTitle}
                             onChangeText={setNewTitle}
                         />
@@ -191,14 +210,15 @@ export default function DepartmentCalendar() {
                         <TextInput
                             style={[styles.input, styles.textArea]}
                             placeholder="Description"
+                            placeholderTextColor={theme.colors.text.muted}
                             value={newDesc}
                             onChangeText={setNewDesc}
                             multiline
                         />
 
                         <View style={styles.modalButtons}>
-                            <Button title="Cancel" onPress={() => setModalVisible(false)} color="#999" />
-                            <Button title={creating ? "Saving..." : "Save"} onPress={createActivity} disabled={creating} />
+                            <Button title="Cancel" onPress={() => setModalVisible(false)} color={theme.colors.text.secondary} />
+                            <Button title={creating ? "Saving..." : "Save"} onPress={createActivity} disabled={creating} color={theme.colors.primary} />
                         </View>
                     </View>
                 </View>
@@ -207,10 +227,10 @@ export default function DepartmentCalendar() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.background,
     },
     activitySection: {
         flex: 1,
@@ -225,33 +245,35 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 18,
         fontWeight: '600',
+        color: theme.colors.text.primary,
     },
     emptyText: {
-        color: '#999',
+        color: theme.colors.text.muted,
         fontStyle: 'italic',
         marginTop: 20,
         textAlign: 'center',
     },
     card: {
-        backgroundColor: 'white',
+        backgroundColor: theme.colors.card,
         padding: 16,
         borderRadius: 8,
         marginBottom: 12,
         borderLeftWidth: 4,
-        borderLeftColor: '#2196f3',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
+        borderLeftColor: theme.colors.info,
+        shadowColor: theme.shadows.soft.shadowColor,
+        shadowOffset: theme.shadows.soft.shadowOffset,
+        shadowOpacity: theme.shadows.soft.shadowOpacity,
+        shadowRadius: theme.shadows.soft.shadowRadius,
+        elevation: theme.shadows.soft.elevation,
     },
     cardTitle: {
         fontSize: 16,
         fontWeight: 'bold',
         marginBottom: 4,
+        color: theme.colors.text.primary,
     },
     cardDesc: {
-        color: '#666',
+        color: theme.colors.text.secondary,
     },
     modalOverlay: {
         flex: 1,
@@ -260,7 +282,7 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     modalContent: {
-        backgroundColor: 'white',
+        backgroundColor: theme.colors.card,
         borderRadius: 12,
         padding: 24,
     },
@@ -268,14 +290,16 @@ const styles = StyleSheet.create({
         fontSize: 20,
         fontWeight: 'bold',
         marginBottom: 20,
+        color: theme.colors.text.primary,
     },
     input: {
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.background,
         padding: 12,
         borderRadius: 8,
         borderWidth: 1,
-        borderColor: '#ddd',
+        borderColor: theme.colors.border,
         marginBottom: 16,
+        color: theme.colors.text.primary,
     },
     textArea: {
         height: 100,

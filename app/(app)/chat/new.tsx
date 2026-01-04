@@ -1,13 +1,17 @@
-import { useEffect } from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { View, ActivityIndicator, StyleSheet, StatusBar } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../src/services/supabase';
 import { useAuth } from '../../../src/context/AuthContext';
+import { useTheme } from '../../../src/context/ThemeContext';
+import { THEME } from '../../../src/constants/Theme';
 
 export default function NewChatRedirect() {
     const { partnerId } = useLocalSearchParams();
     const { user } = useAuth();
     const router = useRouter();
+    const { theme, isDark } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     useEffect(() => {
         if (partnerId && user) {
@@ -53,11 +57,12 @@ export default function NewChatRedirect() {
 
     return (
         <View style={styles.center}>
-            <ActivityIndicator size="large" color="#2196f3" />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+            <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
     );
 }
 
-const styles = StyleSheet.create({
-    center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' }
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
+    center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: theme.colors.background }
 });

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, Alert, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../../src/services/supabase';
@@ -10,6 +10,7 @@ import EmployeeDetailModal from '../../../src/components/EmployeeDetailModal';
 import AddMemberModal from '../../../src/components/AddMemberModal';
 import LeaveRequestModal from '../../../src/components/LeaveRequestModal';
 import { Ionicons } from '@expo/vector-icons';
+import { useTheme } from '../../../src/context/ThemeContext';
 import { THEME } from '../../../src/constants/Theme';
 import { ModernCard } from '../../../src/components/ModernCard';
 
@@ -18,6 +19,8 @@ export default function DepartmentDetail() {
     const teamId = Array.isArray(id) ? id[0] : id;
     const { user } = useAuth();
     const router = useRouter();
+    const { theme, isDark } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     const [team, setTeam] = useState<any>(null);
     const [members, setMembers] = useState<any[]>([]);
@@ -79,7 +82,7 @@ export default function DepartmentDetail() {
 
     async function removeMember(memberId: string) {
         const confirmMsg = "Remove this member from the department?";
-        const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : await new Promise(r => Alert.alert('Confirm', confirmMsg, [{ text: 'Cancel' }, { text: 'Remove', style: 'destructive', onPress: () => r(true) }]));
+        const confirmed = Platform.OS === 'web' ? window.confirm(confirmMsg) : await new Promise(r => Alert.alert('Confirm', confirmMsg, [{ text: 'Cancel' }, { text: 'Remove', style: 'destructive' }]));
         if (confirmed) performRemove(memberId);
     }
 
@@ -94,18 +97,18 @@ export default function DepartmentDetail() {
     if (loading) {
         return (
             <View style={styles.center}>
-                <ActivityIndicator size="large" color={THEME.colors.primary} />
+                <ActivityIndicator size="large" color={theme.colors.primary} />
             </View>
         );
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             <View style={styles.header}>
                 <View style={styles.headerTop}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                        <Ionicons name="chevron-back" size={28} color={THEME.colors.text.primary} />
+                        <Ionicons name="chevron-back" size={28} color={theme.colors.text.primary} />
                     </TouchableOpacity>
                     <View style={styles.headerTitleContainer}>
                         <Text style={styles.title}>{team?.name}</Text>
@@ -116,13 +119,13 @@ export default function DepartmentDetail() {
                 <View style={styles.headerActions}>
                     {['admin', 'ceo', 'hr'].includes(currentUserRole) && (
                         <TouchableOpacity style={styles.actionBtn} onPress={() => setShowLeadersModal(true)}>
-                            <Ionicons name="people-outline" size={18} color={THEME.colors.primary} />
+                            <Ionicons name="people-outline" size={18} color={theme.colors.primary} />
                             <Text style={styles.actionBtnText}>Leaders</Text>
                         </TouchableOpacity>
                     )}
                     {['manager', 'admin', 'ceo'].includes(currentUserRole) && (
                         <TouchableOpacity style={[styles.actionBtn, { marginLeft: 8 }]} onPress={() => setShowAddMemberModal(true)}>
-                            <Ionicons name="person-add-outline" size={18} color={THEME.colors.primary} />
+                            <Ionicons name="person-add-outline" size={18} color={theme.colors.primary} />
                             <Text style={styles.actionBtnText}>Add Member</Text>
                         </TouchableOpacity>
                     )}
@@ -142,7 +145,7 @@ export default function DepartmentDetail() {
                             style={[styles.tab, activeTab === tab.id && styles.activeTab]}
                             onPress={() => setActiveTab(tab.id as any)}
                         >
-                            <Ionicons name={tab.icon as any} size={18} color={activeTab === tab.id ? THEME.colors.primary : THEME.colors.text.secondary} />
+                            <Ionicons name={tab.icon as any} size={18} color={activeTab === tab.id ? theme.colors.primary : theme.colors.text.secondary} />
                             <Text style={[styles.tabText, activeTab === tab.id && styles.activeTabText]}>{tab.label}</Text>
                             {tab.badge && <View style={styles.badgePoint} />}
                         </TouchableOpacity>
@@ -159,7 +162,7 @@ export default function DepartmentDetail() {
                                 <Text style={styles.statLabel}>Team Size</Text>
                             </ModernCard>
                             <ModernCard style={styles.statMiniCard}>
-                                <Text style={[styles.statValue, { color: THEME.colors.success }]}>{members.filter(m => m.status === 'Present').length}</Text>
+                                <Text style={[styles.statValue, { color: theme.colors.success }]}>{members.filter(m => m.status === 'Present').length}</Text>
                                 <Text style={styles.statLabel}>Present</Text>
                             </ModernCard>
                         </View>
@@ -170,7 +173,7 @@ export default function DepartmentDetail() {
                                 <ModernCard style={styles.memberCard}>
                                     <View style={styles.avatar}>
                                         <Text style={styles.avatarText}>{member.first_name[0]}{member.last_name[0]}</Text>
-                                        <View style={[styles.statusDot, { backgroundColor: member.status === 'Present' ? THEME.colors.success : member.status === 'Checked Out' ? THEME.colors.warning : THEME.colors.error }]} />
+                                        <View style={[styles.statusDot, { backgroundColor: member.status === 'Present' ? theme.colors.success : member.status === 'Checked Out' ? theme.colors.warning : theme.colors.error }]} />
                                     </View>
                                     <View style={styles.memberInfo}>
                                         <Text style={styles.memberName}>{member.first_name} {member.last_name}</Text>
@@ -179,10 +182,10 @@ export default function DepartmentDetail() {
                                     <View style={styles.memberRight}>
                                         {['manager', 'admin', 'ceo'].includes(currentUserRole) && (
                                             <TouchableOpacity onPress={(e) => { e.stopPropagation(); removeMember(member.id); }} style={styles.removeBtn}>
-                                                <Ionicons name="remove-circle-outline" size={22} color={THEME.colors.error} />
+                                                <Ionicons name="remove-circle-outline" size={22} color={theme.colors.error} />
                                             </TouchableOpacity>
                                         )}
-                                        <Ionicons name="chevron-forward" size={18} color={THEME.colors.text.muted} />
+                                        <Ionicons name="chevron-forward" size={18} color={theme.colors.text.muted} />
                                     </View>
                                 </ModernCard>
                             </TouchableOpacity>
@@ -197,7 +200,7 @@ export default function DepartmentDetail() {
                         <Text style={styles.sectionTitle}>Pending Leave Requests</Text>
                         {leaveRequests.length === 0 ? (
                             <View style={styles.emptyState}>
-                                <Ionicons name="checkmark-circle-outline" size={48} color={THEME.colors.success} />
+                                <Ionicons name="checkmark-circle-outline" size={48} color={theme.colors.success} />
                                 <Text style={styles.emptyText}>All caught up!</Text>
                             </View>
                         ) : (
@@ -212,7 +215,7 @@ export default function DepartmentDetail() {
                                         <Text style={styles.reqReason} numberOfLines={2}>{req.reason || 'No reason provided'}</Text>
                                         <View style={styles.reqFooter}>
                                             <Text style={styles.reqActionHint}>View Request</Text>
-                                            {req.attachment_url && <Ionicons name="attach" size={16} color={THEME.colors.text.muted} />}
+                                            {req.attachment_url && <Ionicons name="attach" size={16} color={theme.colors.text.muted} />}
                                         </View>
                                     </ModernCard>
                                 </TouchableOpacity>
@@ -230,53 +233,50 @@ export default function DepartmentDetail() {
     );
 }
 
-const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: THEME.colors.background },
-    header: { padding: THEME.spacing.lg, backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border },
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
+    container: { flex: 1, backgroundColor: theme.colors.background },
+    header: { padding: theme.spacing.lg, backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
     headerTop: { flexDirection: 'row', alignItems: 'center' },
     backBtn: { marginRight: 12 },
     headerTitleContainer: { flex: 1 },
-    title: { fontSize: 24, fontWeight: 'bold', color: THEME.colors.text.primary },
-    subtitle: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 2 },
+    title: { fontSize: 24, fontWeight: 'bold', color: theme.colors.text.primary },
+    subtitle: { fontSize: 13, color: theme.colors.text.secondary, marginTop: 2 },
     headerActions: { flexDirection: 'row', marginTop: 16 },
-    actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F0F7FF', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
-    actionBtnText: { color: THEME.colors.primary, fontWeight: 'bold', fontSize: 13, marginLeft: 8 },
-    tabsContainer: { backgroundColor: 'white', borderBottomWidth: 1, borderBottomColor: THEME.colors.border },
-    tabsScroll: { paddingHorizontal: THEME.spacing.lg },
+    actionBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.primary + '15', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+    actionBtnText: { color: theme.colors.primary, fontWeight: 'bold', fontSize: 13, marginLeft: 8 },
+    tabsContainer: { backgroundColor: theme.colors.card, borderBottomWidth: 1, borderBottomColor: theme.colors.border },
+    tabsScroll: { paddingHorizontal: theme.spacing.lg },
     tab: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, marginRight: 24, borderBottomWidth: 3, borderBottomColor: 'transparent', gap: 8 },
-    activeTab: { borderBottomColor: THEME.colors.primary },
-    tabText: { fontSize: 14, fontWeight: '600', color: THEME.colors.text.secondary },
-    activeTabText: { color: THEME.colors.primary },
-    badgePoint: { width: 6, height: 6, borderRadius: 3, backgroundColor: THEME.colors.error, position: 'absolute', top: 14, right: -4 },
+    activeTab: { borderBottomColor: theme.colors.primary },
+    tabText: { fontSize: 14, fontWeight: '600', color: theme.colors.text.secondary },
+    activeTabText: { color: theme.colors.primary },
+    badgePoint: { width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.error, position: 'absolute', top: 14, right: -4 },
     content: { flex: 1 },
-    page: { flex: 1, padding: THEME.spacing.lg },
+    page: { flex: 1, padding: theme.spacing.lg },
     statsRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
     statMiniCard: { flex: 1, padding: 16, alignItems: 'center' },
-    statValue: { fontSize: 22, fontWeight: 'bold', color: THEME.colors.text.primary },
-    statLabel: { fontSize: 12, color: THEME.colors.text.secondary, marginTop: 4 },
-    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: THEME.colors.text.primary },
+    statValue: { fontSize: 22, fontWeight: 'bold', color: theme.colors.text.primary },
+    statLabel: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 4 },
+    sectionTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 16, color: theme.colors.text.primary },
     memberCard: { flexDirection: 'row', alignItems: 'center', padding: 12, marginBottom: 12 },
-    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F0F2F5', justifyContent: 'center', alignItems: 'center' },
-    avatarText: { fontSize: 14, fontWeight: 'bold', color: THEME.colors.text.secondary },
-    statusDot: { width: 12, height: 12, borderRadius: 6, borderHorizontal: 2, borderColor: 'white', position: 'absolute', bottom: 0, right: 0 },
+    avatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.colors.background, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: theme.colors.border },
+    avatarText: { fontSize: 14, fontWeight: 'bold', color: theme.colors.text.secondary },
+    statusDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: theme.colors.card, position: 'absolute', bottom: 0, right: 0 },
     memberInfo: { flex: 1, marginLeft: 16 },
-    memberName: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
-    memberRole: { fontSize: 12, color: THEME.colors.text.secondary, marginTop: 2 },
+    memberName: { fontSize: 16, fontWeight: 'bold', color: theme.colors.text.primary },
+    memberRole: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 2 },
     memberRight: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     removeBtn: { padding: 4 },
     requestCard: { padding: 16, marginBottom: 12 },
     reqHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    reqName: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
-    reqBadge: { backgroundColor: '#FFF3E0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-    reqBadgeText: { fontSize: 10, color: '#E65100', fontWeight: 'bold' },
-    reqDates: { fontSize: 13, color: THEME.colors.primary, marginTop: 4, fontWeight: '500' },
-    reqReason: { fontSize: 13, color: THEME.colors.text.secondary, marginTop: 8, lineHeight: 18 },
-    reqFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-    reqActionHint: { fontSize: 12, fontWeight: 'bold', color: THEME.colors.primary },
+    reqName: { fontSize: 16, fontWeight: 'bold', color: theme.colors.text.primary },
+    reqBadge: { backgroundColor: theme.colors.warning + '15', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+    reqBadgeText: { fontSize: 10, color: theme.colors.warning, fontWeight: 'bold' },
+    reqDates: { fontSize: 13, color: theme.colors.primary, marginTop: 4, fontWeight: '500' },
+    reqReason: { fontSize: 13, color: theme.colors.text.secondary, marginTop: 8, lineHeight: 18 },
+    reqFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border },
+    reqActionHint: { fontSize: 12, fontWeight: 'bold', color: theme.colors.primary },
     emptyState: { alignItems: 'center', marginTop: 40 },
-    emptyText: { fontSize: 16, color: THEME.colors.text.secondary, marginTop: 12 },
+    emptyText: { fontSize: 16, color: theme.colors.text.secondary, marginTop: 12 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' }
 });
-
-
-
