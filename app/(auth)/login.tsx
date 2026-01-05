@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, KeyboardAvoidingView } from 'react-native';
+import React, { useState, useMemo } from 'react';
+import { View, Text, TextInput, StyleSheet, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, KeyboardAvoidingView, ScrollView } from 'react-native';
 import { supabase } from '../../src/services/supabase';
 import { useRouter } from 'expo-router';
 import { THEME } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { ModernCard } from '../../src/components/ModernCard';
 
@@ -13,6 +14,8 @@ export default function Login() {
     const [showPassword, setShowPassword] = useState(false);
     const [errorMessage, setErrorMessage] = useState('');
     const router = useRouter();
+    const { theme, isDark } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     const showAlert = (title: string, message: string) => {
         setErrorMessage(message);
@@ -48,7 +51,7 @@ export default function Login() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={styles.keyboardView}
@@ -68,7 +71,7 @@ export default function Login() {
 
                         {errorMessage ? (
                             <View style={styles.errorBanner}>
-                                <Ionicons name="alert-circle" size={18} color={THEME.colors.error} />
+                                <Ionicons name="alert-circle" size={18} color={theme.colors.error} />
                                 <Text style={styles.errorText}>{errorMessage}</Text>
                             </View>
                         ) : null}
@@ -76,7 +79,7 @@ export default function Login() {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>EMAIL ADDRESS</Text>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="mail-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <Ionicons name="mail-outline" size={20} color={theme.colors.text.muted} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="name@company.com"
@@ -84,7 +87,7 @@ export default function Login() {
                                     onChangeText={setEmail}
                                     autoCapitalize="none"
                                     keyboardType="email-address"
-                                    placeholderTextColor={THEME.colors.text.muted}
+                                    placeholderTextColor={theme.colors.text.muted}
                                 />
                             </View>
                         </View>
@@ -92,7 +95,7 @@ export default function Login() {
                         <View style={styles.inputGroup}>
                             <Text style={styles.label}>PASSWORD</Text>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="lock-closed-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <Ionicons name="lock-closed-outline" size={20} color={theme.colors.text.muted} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="••••••••"
@@ -100,13 +103,13 @@ export default function Login() {
                                     onChangeText={setPassword}
                                     secureTextEntry={!showPassword}
                                     autoCapitalize="none"
-                                    placeholderTextColor={THEME.colors.text.muted}
+                                    placeholderTextColor={theme.colors.text.muted}
                                 />
                                 <TouchableOpacity onPress={() => setShowPassword(!showPassword)}>
                                     <Ionicons
                                         name={showPassword ? "eye-off-outline" : "eye-outline"}
                                         size={20}
-                                        color={THEME.colors.text.muted}
+                                        color={theme.colors.text.muted}
                                     />
                                 </TouchableOpacity>
                             </View>
@@ -144,13 +147,10 @@ export default function Login() {
     );
 }
 
-// Re-using some components but importing ScrollView localy
-import { ScrollView } from 'react-native';
-
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: theme.colors.background,
     },
     keyboardView: {
         flex: 1,
@@ -168,10 +168,10 @@ const styles = StyleSheet.create({
         width: 70,
         height: 70,
         borderRadius: 20,
-        backgroundColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary,
         justifyContent: 'center',
         alignItems: 'center',
-        shadowColor: THEME.colors.primary,
+        shadowColor: theme.colors.primary,
         shadowOffset: { width: 0, height: 8 },
         shadowOpacity: 0.3,
         shadowRadius: 12,
@@ -180,12 +180,12 @@ const styles = StyleSheet.create({
     brandName: {
         fontSize: 32,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
         marginTop: 16,
     },
     brandTagline: {
         fontSize: 14,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginTop: 4,
     },
     loginCard: {
@@ -194,25 +194,25 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
         marginBottom: 8,
     },
     cardSubtitle: {
         fontSize: 14,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginBottom: 32,
     },
     errorBanner: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: THEME.colors.error + '10',
+        backgroundColor: theme.colors.error + '10',
         padding: 12,
         borderRadius: 12,
         marginBottom: 24,
         gap: 8,
     },
     errorText: {
-        color: THEME.colors.error,
+        color: theme.colors.error,
         fontSize: 13,
         fontWeight: '600',
         flex: 1,
@@ -223,18 +223,18 @@ const styles = StyleSheet.create({
     label: {
         fontSize: 11,
         fontWeight: '700',
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginBottom: 8,
         letterSpacing: 1,
     },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: theme.colors.background,
         borderRadius: 16,
         paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: theme.colors.border,
     },
     inputIcon: {
         marginRight: 12,
@@ -243,26 +243,26 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 14,
         fontSize: 15,
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     forgotBtn: {
         alignSelf: 'flex-end',
         marginBottom: 32,
     },
     forgotText: {
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontSize: 13,
         fontWeight: '600',
     },
     signInBtn: {
-        backgroundColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
         padding: 18,
         borderRadius: 16,
         gap: 10,
-        shadowColor: THEME.colors.primary,
+        shadowColor: theme.colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -282,11 +282,11 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     footerText: {
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         fontSize: 14,
     },
     signUpLink: {
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontWeight: 'bold',
         fontSize: 15,
     },

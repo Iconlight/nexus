@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert, ScrollView, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, KeyboardAvoidingView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../src/services/supabase';
 import { THEME } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { ModernCard } from '../../src/components/ModernCard';
 
@@ -17,6 +18,8 @@ export default function CompanySignup() {
     const [loading, setLoading] = useState(false);
     const [statusMessage, setStatusMessage] = useState('');
     const router = useRouter();
+    const { theme, isDark } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     const showAlert = (title: string, message: string, onOk?: () => void) => {
         if (Platform.OS === 'web') {
@@ -93,14 +96,14 @@ export default function CompanySignup() {
 
     return (
         <SafeAreaView style={styles.container}>
-            <StatusBar barStyle="dark-content" />
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 style={{ flex: 1 }}
             >
                 <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
                     <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-                        <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+                        <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
                     </TouchableOpacity>
 
                     <View style={styles.header}>
@@ -112,13 +115,13 @@ export default function CompanySignup() {
                         <Text style={styles.sectionTitle}>ORGANIZATION DETAILS</Text>
                         <View style={styles.inputGroup}>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="business-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <Ionicons name="business-outline" size={20} color={theme.colors.text.muted} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Company Name"
                                     value={companyName}
                                     onChangeText={setCompanyName}
-                                    placeholderTextColor={THEME.colors.text.muted}
+                                    placeholderTextColor={theme.colors.text.muted}
                                 />
                             </View>
                         </View>
@@ -132,7 +135,7 @@ export default function CompanySignup() {
                                         placeholder="First Name"
                                         value={firstName}
                                         onChangeText={setFirstName}
-                                        placeholderTextColor={THEME.colors.text.muted}
+                                        placeholderTextColor={theme.colors.text.muted}
                                     />
                                 </View>
                             </View>
@@ -143,7 +146,7 @@ export default function CompanySignup() {
                                         placeholder="Last Name"
                                         value={lastName}
                                         onChangeText={setLastName}
-                                        placeholderTextColor={THEME.colors.text.muted}
+                                        placeholderTextColor={theme.colors.text.muted}
                                     />
                                 </View>
                             </View>
@@ -151,7 +154,7 @@ export default function CompanySignup() {
 
                         <View style={styles.inputGroup}>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="mail-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <Ionicons name="mail-outline" size={20} color={theme.colors.text.muted} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Admin Email"
@@ -159,14 +162,14 @@ export default function CompanySignup() {
                                     onChangeText={setEmail}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
-                                    placeholderTextColor={THEME.colors.text.muted}
+                                    placeholderTextColor={theme.colors.text.muted}
                                 />
                             </View>
                         </View>
 
                         <View style={styles.inputGroup}>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="lock-closed-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <Ionicons name="lock-closed-outline" size={20} color={theme.colors.text.muted} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Password"
@@ -174,14 +177,14 @@ export default function CompanySignup() {
                                     onChangeText={setPassword}
                                     secureTextEntry
                                     autoCapitalize="none"
-                                    placeholderTextColor={THEME.colors.text.muted}
+                                    placeholderTextColor={theme.colors.text.muted}
                                 />
                             </View>
                         </View>
 
                         <View style={styles.inputGroup}>
                             <View style={styles.inputWrapper}>
-                                <Ionicons name="shield-checkmark-outline" size={20} color={THEME.colors.text.muted} style={styles.inputIcon} />
+                                <Ionicons name="shield-checkmark-outline" size={20} color={theme.colors.text.muted} style={styles.inputIcon} />
                                 <TextInput
                                     style={styles.input}
                                     placeholder="Confirm Password"
@@ -189,7 +192,7 @@ export default function CompanySignup() {
                                     onChangeText={setConfirmPassword}
                                     secureTextEntry
                                     autoCapitalize="none"
-                                    placeholderTextColor={THEME.colors.text.muted}
+                                    placeholderTextColor={theme.colors.text.muted}
                                 />
                             </View>
                         </View>
@@ -223,10 +226,10 @@ export default function CompanySignup() {
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: theme.colors.background,
     },
     scrollContent: {
         padding: 24,
@@ -235,7 +238,7 @@ const styles = StyleSheet.create({
         width: 44,
         height: 44,
         borderRadius: 12,
-        backgroundColor: 'white',
+        backgroundColor: theme.colors.card,
         justifyContent: 'center',
         alignItems: 'center',
         marginBottom: 32,
@@ -251,12 +254,12 @@ const styles = StyleSheet.create({
     title: {
         fontSize: 28,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
         marginBottom: 8,
     },
     subtitle: {
         fontSize: 15,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
     },
     formCard: {
         padding: 24,
@@ -264,7 +267,7 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 11,
         fontWeight: 'bold',
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginBottom: 16,
         letterSpacing: 1,
     },
@@ -278,11 +281,11 @@ const styles = StyleSheet.create({
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: theme.colors.background,
         borderRadius: 16,
         paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: theme.colors.border,
     },
     inputIcon: {
         marginRight: 12,
@@ -291,10 +294,10 @@ const styles = StyleSheet.create({
         flex: 1,
         paddingVertical: 14,
         fontSize: 15,
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     signupBtn: {
-        backgroundColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
@@ -302,7 +305,7 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         marginTop: 16,
         gap: 10,
-        shadowColor: THEME.colors.primary,
+        shadowColor: theme.colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -324,11 +327,11 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     footerText: {
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         fontSize: 14,
     },
     loginLink: {
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontWeight: 'bold',
         fontSize: 15,
     },

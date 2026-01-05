@@ -153,6 +153,7 @@ serve(async (req) => {
             }
         }
 
+
         // Send invitation email via EmailJS
         try {
             const emailJSServiceId = Deno.env.get('EMAILJS_SERVICE_ID') || 'service_89mlz15'
@@ -173,7 +174,7 @@ serve(async (req) => {
                 .single()
 
             const emailParams = {
-                to_email: email,
+                to_email: email, // This is the invited employee's email
                 to_name: `${firstName} ${lastName}`,
                 company_name: company?.name || 'Your Company',
                 username: `${firstName} ${lastName}`,
@@ -184,6 +185,9 @@ serve(async (req) => {
                 leave_days: allowedLeaveDays,
                 login_url: Deno.env.get('APP_URL') || 'https://your-app-url.com'
             }
+
+            console.log('Sending email to:', email) // Log the recipient email
+            console.log('Email params:', { ...emailParams, temp_password: '***' }) // Log params without password
 
             // EmailJS REST API v1.0 format
             const emailResponse = await fetch('https://api.emailjs.com/api/v1.0/email/send', {
@@ -205,8 +209,11 @@ serve(async (req) => {
             if (!emailResponse.ok) {
                 console.error('EmailJS Error Response:', emailResult)
                 console.error('EmailJS Status:', emailResponse.status)
+                console.error('IMPORTANT: Check your EmailJS template configuration!')
+                console.error('The template must use {{to_email}} for the recipient email address')
             } else {
-                console.log('Email sent successfully:', emailResult)
+                console.log('Email sent successfully to:', email)
+                console.log('EmailJS Response:', emailResult)
             }
         } catch (emailError) {
             console.error('Email sending error:', emailError)

@@ -400,8 +400,8 @@ export default function Dashboard() {
                         <View style={styles.actionGrid}>
                             {(isAdmin || isHR) && (
                                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/employees')}>
-                                    <View style={[styles.actionIconBox, { backgroundColor: '#E3F2FD' }]}>
-                                        <Ionicons name="people" size={24} color="#2196F3" />
+                                    <View style={[styles.actionIconBox, { backgroundColor: theme.colors.primary + '15' }]}>
+                                        <Ionicons name="people" size={24} color={theme.colors.primary} />
                                     </View>
                                     <Text style={styles.actionBtnText}>Employees</Text>
                                 </TouchableOpacity>
@@ -410,8 +410,8 @@ export default function Dashboard() {
                             {/* Manager: My Department */}
                             {isManager && (
                                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/my-department')}>
-                                    <View style={[styles.actionIconBox, { backgroundColor: '#E3F2FD' }]}>
-                                        <Ionicons name="business" size={24} color={THEME.colors.primary} />
+                                    <View style={[styles.actionIconBox, { backgroundColor: theme.colors.primary + '15' }]}>
+                                        <Ionicons name="business" size={24} color={theme.colors.primary} />
                                     </View>
                                     <Text style={styles.actionBtnText}>My Dept</Text>
                                 </TouchableOpacity>
@@ -419,31 +419,31 @@ export default function Dashboard() {
 
                             {(isAdmin || isHR) && (
                                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/teams')}>
-                                    <View style={[styles.actionIconBox, { backgroundColor: '#F3E5F5' }]}>
-                                        <Ionicons name="business" size={24} color="#9C27B0" />
+                                    <View style={[styles.actionIconBox, { backgroundColor: theme.colors.secondary + '15' }]}>
+                                        <Ionicons name="business" size={24} color={theme.colors.secondary} />
                                     </View>
                                     <Text style={styles.actionBtnText}>Teams</Text>
                                 </TouchableOpacity>
                             )}
 
                             <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/approvals')}>
-                                <View style={[styles.actionIconBox, { backgroundColor: '#E8F5E9' }]}>
-                                    <Ionicons name="checkmark-circle" size={24} color="#4CAF50" />
+                                <View style={[styles.actionIconBox, { backgroundColor: theme.colors.success + '15' }]}>
+                                    <Ionicons name="checkmark-circle" size={24} color={theme.colors.success} />
                                 </View>
                                 <Text style={styles.actionBtnText}>Approvals</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/attendance-report')}>
-                                <View style={[styles.actionIconBox, { backgroundColor: isDark ? '#333' : '#FFFDE7' }]}>
-                                    <Ionicons name="stats-chart" size={24} color="#FBC02D" />
+                                <View style={[styles.actionIconBox, { backgroundColor: theme.colors.warning + '15' }]}>
+                                    <Ionicons name="stats-chart" size={24} color={theme.colors.warning} />
                                 </View>
                                 <Text style={styles.actionBtnText}>Attendance</Text>
                             </TouchableOpacity>
 
                             {(isAdmin || isHR) && (
                                 <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/settings')}>
-                                    <View style={[styles.actionIconBox, { backgroundColor: '#FFF3E0' }]}>
-                                        <Ionicons name="settings" size={24} color="#FF9800" />
+                                    <View style={[styles.actionIconBox, { backgroundColor: theme.colors.info + '15' }]}>
+                                        <Ionicons name="settings" size={24} color={theme.colors.info} />
                                     </View>
                                     <Text style={styles.actionBtnText}>Settings</Text>
                                 </TouchableOpacity>

@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, ScrollView, ActivityIndicator, SafeAreaView, StatusBar } from 'react-native';
 import { supabase } from '../services/supabase';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../constants/Theme';
 import { ModernCard } from './ModernCard';
@@ -42,6 +43,8 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
     const [loadingDM, setLoadingDM] = useState(false);
     const { user: currentUser } = useAuth();
     const router = useRouter();
+    const { theme } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
 
     useEffect(() => {
         if (visible && employee) {
@@ -147,18 +150,18 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                             </View>
                         </View>
                         <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                            <Ionicons name="close" size={24} color={THEME.colors.text.primary} />
+                            <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                         </TouchableOpacity>
                     </View>
 
                     <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollArea}>
                         <View style={styles.roleContainer}>
                             <View style={styles.roleBadge}>
-                                <Ionicons name="shield-checkmark" size={14} color={THEME.colors.primary} />
+                                <Ionicons name="shield-checkmark" size={14} color={theme.colors.primary} />
                                 <Text style={styles.roleText}>{employee.role.toUpperCase()}</Text>
                             </View>
                             <View style={styles.deptBadge}>
-                                <Ionicons name="business" size={14} color={THEME.colors.text.secondary} />
+                                <Ionicons name="business" size={14} color={theme.colors.text.secondary} />
                                 <Text style={styles.deptText}>{employee.department || 'Unassigned'}</Text>
                             </View>
                         </View>
@@ -168,7 +171,7 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                             <ModernCard style={styles.infoCard}>
                                 <View style={styles.infoRow}>
                                     <View style={styles.infoIcon}>
-                                        <Ionicons name="mail-outline" size={18} color={THEME.colors.text.muted} />
+                                        <Ionicons name="mail-outline" size={18} color={theme.colors.text.muted} />
                                     </View>
                                     <View>
                                         <Text style={styles.infoLabel}>Email Address</Text>
@@ -178,7 +181,7 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                                 <View style={styles.divider} />
                                 <View style={styles.infoRow}>
                                     <View style={styles.infoIcon}>
-                                        <Ionicons name="call-outline" size={18} color={THEME.colors.text.muted} />
+                                        <Ionicons name="call-outline" size={18} color={theme.colors.text.muted} />
                                     </View>
                                     <View>
                                         <Text style={styles.infoLabel}>Phone Number</Text>
@@ -188,7 +191,7 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                                 <View style={styles.divider} />
                                 <View style={styles.infoRow}>
                                     <View style={styles.infoIcon}>
-                                        <Ionicons name="person-outline" size={18} color={THEME.colors.text.muted} />
+                                        <Ionicons name="person-outline" size={18} color={theme.colors.text.muted} />
                                     </View>
                                     <View>
                                         <Text style={styles.infoLabel}>Gender</Text>
@@ -203,35 +206,35 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
                                 <Text style={styles.sectionTitle}>Activity & Stats</Text>
                                 <View style={styles.monthPicker}>
                                     <TouchableOpacity onPress={() => changeMonth(-1)} style={styles.monthNav}>
-                                        <Ionicons name="chevron-back" size={20} color={THEME.colors.text.secondary} />
+                                        <Ionicons name="chevron-back" size={20} color={theme.colors.text.secondary} />
                                     </TouchableOpacity>
                                     <Text style={styles.monthLabel}>
                                         {currentDate.toLocaleDateString('default', { month: 'short', year: 'numeric' })}
                                     </Text>
                                     <TouchableOpacity onPress={() => changeMonth(1)} style={styles.monthNav}>
-                                        <Ionicons name="chevron-forward" size={20} color={THEME.colors.text.secondary} />
+                                        <Ionicons name="chevron-forward" size={20} color={theme.colors.text.secondary} />
                                     </TouchableOpacity>
                                 </View>
                             </View>
 
                             {loading ? (
-                                <ActivityIndicator style={{ margin: 30 }} color={THEME.colors.primary} />
+                                <ActivityIndicator style={{ margin: 30 }} color={theme.colors.primary} />
                             ) : (
                                 <View style={styles.statsGrid}>
-                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.primary + '08' }]}>
-                                        <Text style={[styles.statVal, { color: THEME.colors.primary }]}>{stats?.attendanceRate ?? 0}%</Text>
+                                    <View style={[styles.statItem, { backgroundColor: theme.colors.primary + '08' }]}>
+                                        <Text style={[styles.statVal, { color: theme.colors.primary }]}>{stats?.attendanceRate ?? 0}%</Text>
                                         <Text style={styles.statLab}>Attendance</Text>
                                     </View>
-                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.success + '08' }]}>
-                                        <Text style={[styles.statVal, { color: THEME.colors.success }]}>{stats?.daysPresent ?? 0}</Text>
+                                    <View style={[styles.statItem, { backgroundColor: theme.colors.success + '08' }]}>
+                                        <Text style={[styles.statVal, { color: theme.colors.success }]}>{stats?.daysPresent ?? 0}</Text>
                                         <Text style={styles.statLab}>Present</Text>
                                     </View>
-                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.error + '08' }]}>
-                                        <Text style={[styles.statVal, { color: THEME.colors.error }]}>{stats?.daysAbsent ?? 0}</Text>
+                                    <View style={[styles.statItem, { backgroundColor: theme.colors.error + '08' }]}>
+                                        <Text style={[styles.statVal, { color: theme.colors.error }]}>{stats?.daysAbsent ?? 0}</Text>
                                         <Text style={styles.statLab}>Absent</Text>
                                     </View>
-                                    <View style={[styles.statItem, { backgroundColor: THEME.colors.warning + '08' }]}>
-                                        <Text style={[styles.statVal, { color: THEME.colors.warning }]}>{stats?.leavesUsed ?? 0}</Text>
+                                    <View style={[styles.statItem, { backgroundColor: theme.colors.warning + '08' }]}>
+                                        <Text style={[styles.statVal, { color: theme.colors.warning }]}>{stats?.leavesUsed ?? 0}</Text>
                                         <Text style={styles.statLab}>Leaves</Text>
                                     </View>
                                 </View>
@@ -267,14 +270,14 @@ export default function EmployeeDetailModal({ visible, onClose, employee }: Empl
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.4)',
         justifyContent: 'flex-end',
     },
     modalContent: {
-        backgroundColor: 'white',
+        backgroundColor: theme.colors.card,
         borderTopLeftRadius: 32,
         borderTopRightRadius: 32,
         height: '90%',
@@ -300,28 +303,28 @@ const styles = StyleSheet.create({
         width: 64,
         height: 64,
         borderRadius: 32,
-        backgroundColor: THEME.colors.primary + '15',
+        backgroundColor: theme.colors.primary + '15',
         justifyContent: 'center',
         alignItems: 'center',
     },
     avatarTextLarge: {
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontSize: 28,
         fontWeight: 'bold',
     },
     name: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     jobTitle: {
         fontSize: 14,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginTop: 2,
     },
     closeBtn: {
         padding: 8,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.background,
         borderRadius: 12,
     },
     scrollArea: {
@@ -336,30 +339,32 @@ const styles = StyleSheet.create({
     roleBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: THEME.colors.primary + '08',
+        backgroundColor: theme.colors.primary + '08',
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
         gap: 4,
         borderWidth: 1,
-        borderColor: THEME.colors.primary + '20',
+        borderColor: theme.colors.primary + '20',
     },
     roleText: {
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontWeight: 'bold',
         fontSize: 11,
     },
     deptBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f0f2f5',
+        backgroundColor: theme.colors.background,
         paddingHorizontal: 12,
         paddingVertical: 6,
         borderRadius: 20,
         gap: 4,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
     },
     deptText: {
-        color: THEME.colors.text.secondary,
+        color: theme.colors.text.secondary,
         fontWeight: '600',
         fontSize: 11,
     },
@@ -375,11 +380,12 @@ const styles = StyleSheet.create({
     sectionTitle: {
         fontSize: 17,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
         marginBottom: 16,
     },
     infoCard: {
         padding: 4,
+        backgroundColor: theme.colors.card,
     },
     infoRow: {
         flexDirection: 'row',
@@ -391,31 +397,31 @@ const styles = StyleSheet.create({
         width: 36,
         height: 36,
         borderRadius: 18,
-        backgroundColor: '#f8f9fa',
+        backgroundColor: theme.colors.background,
         justifyContent: 'center',
         alignItems: 'center',
     },
     infoLabel: {
         fontSize: 11,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     infoValue: {
         fontSize: 15,
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
         fontWeight: '600',
         marginTop: 2,
     },
     divider: {
         height: 1,
-        backgroundColor: THEME.colors.border,
+        backgroundColor: theme.colors.border,
         marginHorizontal: 16,
     },
     monthPicker: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f0f2f5',
+        backgroundColor: theme.colors.background,
         borderRadius: 12,
         padding: 4,
     },
@@ -425,7 +431,7 @@ const styles = StyleSheet.create({
     monthLabel: {
         fontSize: 12,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
         marginHorizontal: 8,
     },
     statsGrid: {
@@ -446,7 +452,7 @@ const styles = StyleSheet.create({
     },
     statLab: {
         fontSize: 11,
-        color: THEME.colors.text.secondary,
+        color: theme.colors.text.secondary,
         fontWeight: '600',
         marginTop: 4,
     },
@@ -455,14 +461,14 @@ const styles = StyleSheet.create({
         marginTop: 8,
     },
     msgBtn: {
-        backgroundColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary,
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
         padding: 18,
         borderRadius: 20,
         gap: 10,
-        shadowColor: THEME.colors.primary,
+        shadowColor: theme.colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,
@@ -478,7 +484,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     closeActionText: {
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         fontWeight: '600',
         fontSize: 15,
     },

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, Modal, TouchableOpacity, TextInput, ScrollView, Platform, ActivityIndicator } from 'react-native';
 import { THEME } from '../constants/Theme';
+import { useTheme } from '../context/ThemeContext';
 import { ModernCard } from './ModernCard';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -28,6 +29,9 @@ type EditEmployeeModalProps = {
 };
 
 export default function EditEmployeeModal({ visible, onClose, employee, departments, onUpdate }: EditEmployeeModalProps) {
+    const { theme } = useTheme();
+    const styles = useMemo(() => createStyles(theme), [theme]);
+
     const [role, setRole] = useState('');
     const [departmentId, setDepartmentId] = useState('');
     const [gender, setGender] = useState('');
@@ -79,7 +83,7 @@ export default function EditEmployeeModal({ visible, onClose, employee, departme
                             </Text>
                         </View>
                         <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
-                            <Ionicons name="close" size={24} color={THEME.colors.text.primary} />
+                            <Ionicons name="close" size={24} color={theme.colors.text.primary} />
                         </TouchableOpacity>
                     </View>
 
@@ -166,7 +170,7 @@ export default function EditEmployeeModal({ visible, onClose, employee, departme
                                 onChangeText={setBaseSalary}
                                 placeholder="0.00"
                                 keyboardType="numeric"
-                                placeholderTextColor={THEME.colors.text.muted}
+                                placeholderTextColor={theme.colors.text.muted}
                             />
                         </View>
 
@@ -192,7 +196,7 @@ export default function EditEmployeeModal({ visible, onClose, employee, departme
     );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (theme: typeof THEME) => StyleSheet.create({
     modalOverlay: {
         flex: 1,
         backgroundColor: 'rgba(0,0,0,0.6)',
@@ -200,7 +204,7 @@ const styles = StyleSheet.create({
         padding: 20,
     },
     modalContent: {
-        backgroundColor: 'white',
+        backgroundColor: theme.colors.card,
         borderRadius: 24,
         padding: 24,
         maxHeight: '85%',
@@ -219,22 +223,22 @@ const styles = StyleSheet.create({
     formTitle: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
     },
     modalSubtitle: {
         fontSize: 14,
-        color: THEME.colors.text.muted,
+        color: theme.colors.text.muted,
         marginTop: 4,
     },
     closeBtn: {
         padding: 8,
-        backgroundColor: '#f5f5f5',
+        backgroundColor: theme.colors.background,
         borderRadius: 12,
     },
     label: {
         fontSize: 13,
         fontWeight: '700',
-        color: THEME.colors.text.secondary,
+        color: theme.colors.text.secondary,
         marginBottom: 12,
         marginTop: 16,
         textTransform: 'uppercase',
@@ -250,47 +254,47 @@ const styles = StyleSheet.create({
         paddingVertical: 10,
         paddingHorizontal: 16,
         borderRadius: 12,
-        backgroundColor: '#f0f2f5',
+        backgroundColor: theme.colors.background,
         borderWidth: 1,
-        borderColor: 'transparent',
+        borderColor: theme.colors.border,
     },
     tagActive: {
-        backgroundColor: THEME.colors.primary + '15',
-        borderColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary + '15',
+        borderColor: theme.colors.primary,
     },
     tagText: {
         fontSize: 13,
-        color: THEME.colors.text.secondary,
+        color: theme.colors.text.secondary,
         fontWeight: '500',
     },
     tagTextActive: {
-        color: THEME.colors.primary,
+        color: theme.colors.primary,
         fontWeight: 'bold',
     },
     inputContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#f8f9fa',
+        backgroundColor: theme.colors.background,
         borderRadius: 16,
         paddingHorizontal: 16,
         borderWidth: 1,
-        borderColor: THEME.colors.border,
+        borderColor: theme.colors.border,
     },
     currencyPrefix: {
         fontSize: 16,
         fontWeight: 'bold',
-        color: THEME.colors.text.secondary,
+        color: theme.colors.text.secondary,
         marginRight: 8,
     },
     input: {
         flex: 1,
         paddingVertical: 14,
         fontSize: 16,
-        color: THEME.colors.text.primary,
+        color: theme.colors.text.primary,
         fontWeight: '600',
     },
     saveBtn: {
-        backgroundColor: THEME.colors.primary,
+        backgroundColor: theme.colors.primary,
         flexDirection: 'row',
         justifyContent: 'center',
         alignItems: 'center',
@@ -298,7 +302,7 @@ const styles = StyleSheet.create({
         borderRadius: 16,
         marginTop: 32,
         gap: 8,
-        shadowColor: THEME.colors.primary,
+        shadowColor: theme.colors.primary,
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,

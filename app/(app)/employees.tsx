@@ -235,11 +235,10 @@ export default function Employees() {
                     <ModernCard style={styles.formCard}>
                         <Text style={styles.sectionHeading}>Invitation Details</Text>
                         <View style={styles.inputGroup}>
-                            <View style={styles.row}>
-                                <TextInput style={[styles.input, styles.half]} placeholder="First Name *" value={firstName} onChangeText={setFirstName} placeholderTextColor={theme.colors.text.muted} />
-                                <TextInput style={[styles.input, styles.half]} placeholder="Last Name *" value={lastName} onChangeText={setLastName} placeholderTextColor={theme.colors.text.muted} />
-                            </View>
+                            <TextInput style={styles.input} placeholder="First Name *" value={firstName} onChangeText={setFirstName} placeholderTextColor={theme.colors.text.muted} />
+                            <TextInput style={styles.input} placeholder="Last Name *" value={lastName} onChangeText={setLastName} placeholderTextColor={theme.colors.text.muted} />
                             <TextInput style={styles.input} placeholder="Email Address *" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" placeholderTextColor={theme.colors.text.muted} />
+                            <TextInput style={styles.input} placeholder="Phone Number" value={phone} onChangeText={setPhone} keyboardType="phone-pad" placeholderTextColor={theme.colors.text.muted} />
                             <TextInput style={styles.input} placeholder="Job Title *" value={jobTitle} onChangeText={setJobTitle} placeholderTextColor={theme.colors.text.muted} />
                             <TextInput style={styles.input} placeholder="Base Salary *" value={baseSalary} onChangeText={setBaseSalary} keyboardType="numeric" placeholderTextColor={theme.colors.text.muted} />
                         </View>
