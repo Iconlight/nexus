@@ -29,6 +29,11 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "scheme": "nexus"
+    "scheme": "nexus",
+    "extra": {
+      "eas": {
+        "projectId": "65add426-a169-40d3-9197-ffe13d9d8d4b"
+      }
+    }
   }
 }
