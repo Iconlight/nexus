@@ -51,12 +51,12 @@ export default function Settings() {
 
             setCompanyId(profile.company_id);
 
-            // Get company settings
-            const { data: company } = await supabase
-                .from('companies')
-                .select('name, office_location, office_radius_meters')
-                .eq('id', profile.company_id)
-                .single();
+            // Get company settings using RPC for proper location formatting
+            const { data: company, error: rpcError } = await supabase.rpc('get_office_settings', {
+                p_company_id: profile.company_id
+            });
+
+            if (rpcError) throw rpcError;
 
             if (company) {
                 setCompanyName(company.name);
@@ -81,6 +81,17 @@ export default function Settings() {
 
     function parseOfficeLocation(location: any): { latitude: number; longitude: number } | null {
         try {
+            if (!location) return null;
+
+            // Handle GeoJSON format (returned by our get_office_settings RPC)
+            if (location.type === 'Point' && Array.isArray(location.coordinates)) {
+                return {
+                    longitude: location.coordinates[0],
+                    latitude: location.coordinates[1]
+                };
+            }
+
+            // Handle WKT string format
             if (typeof location === 'string') {
                 const match = location.match(/POINT\(([^ ]+) ([^ ]+)\)/);
                 if (match) {
@@ -89,7 +100,10 @@ export default function Settings() {
                         latitude: parseFloat(match[2])
                     };
                 }
-            } else if (location?.coordinates) {
+            }
+
+            // Handle raw coordinates object if somehow passed
+            if (location.coordinates) {
                 return {
                     longitude: location.coordinates[0],
                     latitude: location.coordinates[1]
@@ -128,7 +142,8 @@ export default function Settings() {
 
     async function saveSettings() {
         if (!officeLatitude || !officeLongitude) {
-            Alert.alert('Validation Error', 'Please set office location first');
+            const msg = 'Please set office location first';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Validation Error', msg);
             return;
         }
 
@@ -137,18 +152,20 @@ export default function Settings() {
         const radius = parseInt(officeRadius);
 
         if (isNaN(lat) || isNaN(lon) || lat < -90 || lat > 90 || lon < -180 || lon > 180) {
-            Alert.alert('Validation Error', 'Invalid coordinates. Latitude: -90 to 90, Longitude: -180 to 180');
+            const msg = 'Invalid coordinates. Latitude: -90 to 90, Longitude: -180 to 180';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Validation Error', msg);
             return;
         }
 
         if (isNaN(radius) || radius < 10 || radius > 5000) {
-            Alert.alert('Validation Error', 'Radius must be between 10 and 5000 meters');
+            const msg = 'Radius must be between 10 and 5000 meters';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Validation Error', msg);
             return;
         }
 
         setSaving(true);
         try {
-            const { error } = await supabase.rpc('update_office_location', {
+            const { data, error } = await supabase.rpc('update_office_location', {
                 p_company_id: companyId,
                 p_latitude: lat,
                 p_longitude: lon,
@@ -156,10 +173,18 @@ export default function Settings() {
             });
 
             if (error) throw error;
-            Alert.alert('Success', 'Office location saved successfully!');
+
+            // Check the response from the function
+            if (data && !data.success) {
+                throw new Error(data.message || 'Failed to save settings');
+            }
+
+            const successMsg = 'Office location saved successfully!';
+            Platform.OS === 'web' ? alert(successMsg) : Alert.alert('Success', successMsg);
         } catch (error: any) {
             console.error('Error saving settings:', error);
-            Alert.alert('Error', error.message || 'Failed to save settings');
+            const msg = error.message || 'Failed to save settings';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
         } finally {
             setSaving(false);
         }

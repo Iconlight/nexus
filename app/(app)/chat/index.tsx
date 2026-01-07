@@ -44,7 +44,7 @@ export default function ChatList() {
             const { data: existing, error } = await supabase
                 .from('chat_channels')
                 .select('*, profiles_a:participant_a(first_name, last_name), profiles_b:participant_b(first_name, last_name)')
-                .order('created_at', { ascending: false });
+                .order('updated_at', { ascending: false });
 
             if (error) throw error;
 

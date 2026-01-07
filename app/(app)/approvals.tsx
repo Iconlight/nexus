@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, ActivityIndicator, SafeAreaView, StatusBar, RefreshControl, Linking } from 'react-native';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +20,7 @@ type LeaveRequest = {
     approved_by: string | null;
     approved_at: string | null;
     rejection_reason: string | null;
+    attachment_url?: string;
     employee_name?: string;
     employee_email?: string;
 };
@@ -35,6 +36,7 @@ export default function Approvals() {
     const [refreshing, setRefreshing] = useState(false);
     const [filter, setFilter] = useState<'pending' | 'all'>('pending');
     const [processingId, setProcessingId] = useState<string | null>(null);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
 
     useEffect(() => {
         loadRequests();
@@ -44,7 +46,7 @@ export default function Approvals() {
         try {
             const { data: profile } = await supabase
                 .from('profiles')
-                .select('company_id, role, department_id')
+                .select('company_id, role, team_id')
                 .eq('id', user?.id)
                 .single();
 
@@ -58,16 +60,17 @@ export default function Approvals() {
                         first_name,
                         last_name,
                         email,
-                        department_id
-                    )
+                        team_id
+                    ),
+                    attachment_url
                 `)
                 .eq('company_id', profile.company_id)
                 .order('created_at', { ascending: false });
 
-            // If manager, filter by department
-            if (profile.role === 'manager' && profile.department_id) {
+            // If manager, filter by team
+            if (profile.role === 'manager' && profile.team_id) {
                 // We use the inner join filter
-                query = query.eq('profiles.department_id', profile.department_id);
+                query = query.eq('profiles.team_id', profile.team_id);
             }
 
             if (filter === 'pending') {
@@ -214,85 +217,109 @@ export default function Approvals() {
                         <Text style={styles.emptyText}>No {filter === 'pending' ? 'pending' : ''} requests found</Text>
                     </View>
                 ) : (
-                    requests.map((req) => (
-                        <ModernCard key={req.id} style={styles.requestCard}>
-                            <View style={styles.cardHeader}>
-                                <View style={styles.userInfo}>
-                                    <View style={styles.avatarMini}>
-                                        <Text style={styles.avatarTextMini}>{req.employee_name ? req.employee_name[0] : 'U'}</Text>
+                    requests.map((req) => {
+                        const isExpanded = expandedId === req.id;
+                        return (
+                            <ModernCard key={req.id} style={styles.requestCard}>
+                                <TouchableOpacity
+                                    activeOpacity={0.7}
+                                    onPress={() => setExpandedId(isExpanded ? null : req.id)}
+                                >
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.userInfo}>
+                                            <View style={styles.avatarMini}>
+                                                <Text style={styles.avatarTextMini}>{req.employee_name ? req.employee_name[0] : 'U'}</Text>
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.employeeName}>{req.employee_name}</Text>
+                                                <Text style={styles.employeeEmail} numberOfLines={1}>{req.employee_email}</Text>
+                                            </View>
+                                        </View>
+                                        <View style={[
+                                            styles.statusBadge,
+                                            req.status === 'approved' ? styles.approvedBadge :
+                                                req.status === 'rejected' ? styles.rejectedBadge : styles.pendingBadge
+                                        ]}>
+                                            <Text style={[
+                                                styles.statusText,
+                                                req.status === 'approved' ? styles.approvedText :
+                                                    req.status === 'rejected' ? styles.rejectedText : styles.pendingText
+                                            ]}>
+                                                {req.status.toUpperCase()}
+                                            </Text>
+                                        </View>
                                     </View>
-                                    <View style={{ flex: 1 }}>
-                                        <Text style={styles.employeeName}>{req.employee_name}</Text>
-                                        <Text style={styles.employeeEmail} numberOfLines={1}>{req.employee_email}</Text>
+
+                                    <View style={styles.divider} />
+
+                                    <View style={styles.detailsGroup}>
+                                        <View style={styles.typeRow}>
+                                            <Ionicons name="calendar-outline" size={16} color={theme.colors.primary} />
+                                            <Text style={styles.leaveType}>{req.leave_type.toUpperCase()} LEAVE</Text>
+                                        </View>
+                                        <Text style={styles.dates}>
+                                            {new Date(req.start_date).toLocaleDateString()} — {new Date(req.end_date).toLocaleDateString()}
+                                        </Text>
+
+                                        {isExpanded ? (
+                                            <>
+                                                <View style={styles.reasonBox}>
+                                                    <Text style={styles.reasonLabel}>REASON</Text>
+                                                    <Text style={styles.reasonText}>{req.reason || 'No reason provided'}</Text>
+                                                </View>
+
+                                                {req.rejection_reason && (
+                                                    <View style={styles.rejectionBox}>
+                                                        <Text style={styles.rejectionLabel}>REJECTION REASON</Text>
+                                                        <Text style={styles.rejectionText}>{req.rejection_reason}</Text>
+                                                    </View>
+                                                )}
+
+                                                {req.attachment_url && (
+                                                    <TouchableOpacity
+                                                        style={styles.attachmentBtn}
+                                                        onPress={() => Linking.openURL(req.attachment_url!)}
+                                                    >
+                                                        <Ionicons name="document-attach" size={20} color={theme.colors.primary} />
+                                                        <Text style={styles.attachmentBtnText}>View Attached Document</Text>
+                                                    </TouchableOpacity>
+                                                )}
+
+                                                <Text style={styles.timestamp}>
+                                                    Submitted on {new Date(req.created_at).toLocaleDateString()} at {new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                </Text>
+                                            </>
+                                        ) : (
+                                            <Text style={styles.tapForMore}>Tap to show details...</Text>
+                                        )}
                                     </View>
-                                </View>
-                                <View style={[
-                                    styles.statusBadge,
-                                    req.status === 'approved' ? styles.approvedBadge :
-                                        req.status === 'rejected' ? styles.rejectedBadge : styles.pendingBadge
-                                ]}>
-                                    <Text style={[
-                                        styles.statusText,
-                                        req.status === 'approved' ? styles.approvedText :
-                                            req.status === 'rejected' ? styles.rejectedText : styles.pendingText
-                                    ]}>
-                                        {req.status.toUpperCase()}
-                                    </Text>
-                                </View>
-                            </View>
+                                </TouchableOpacity>
 
-                            <View style={styles.divider} />
-
-                            <View style={styles.detailsGroup}>
-                                <View style={styles.typeRow}>
-                                    <Ionicons name="calendar-outline" size={16} color={theme.colors.primary} />
-                                    <Text style={styles.leaveType}>{req.leave_type.toUpperCase()} LEAVE</Text>
-                                </View>
-                                <Text style={styles.dates}>
-                                    {new Date(req.start_date).toLocaleDateString()} — {new Date(req.end_date).toLocaleDateString()}
-                                </Text>
-
-                                <View style={styles.reasonBox}>
-                                    <Text style={styles.reasonLabel}>REASON</Text>
-                                    <Text style={styles.reasonText}>{req.reason || 'No reason provided'}</Text>
-                                </View>
-
-                                {req.rejection_reason && (
-                                    <View style={styles.rejectionBox}>
-                                        <Text style={styles.rejectionLabel}>REJECTION REASON</Text>
-                                        <Text style={styles.rejectionText}>{req.rejection_reason}</Text>
+                                {isExpanded && req.status === 'pending' && (
+                                    <View style={styles.actionRow}>
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.rejectBtn]}
+                                            onPress={() => handleReject(req.id)}
+                                            disabled={processingId === req.id}
+                                        >
+                                            <Text style={styles.rejectBtnText}>Reject</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity
+                                            style={[styles.actionBtn, styles.approveBtn]}
+                                            onPress={() => handleApprove(req.id)}
+                                            disabled={processingId === req.id}
+                                        >
+                                            {processingId === req.id ? (
+                                                <ActivityIndicator size="small" color="white" />
+                                            ) : (
+                                                <Text style={styles.approveBtnText}>Approve</Text>
+                                            )}
+                                        </TouchableOpacity>
                                     </View>
                                 )}
-
-                                <Text style={styles.timestamp}>
-                                    Submitted on {new Date(req.created_at).toLocaleDateString()} at {new Date(req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                </Text>
-                            </View>
-
-                            {req.status === 'pending' && (
-                                <View style={styles.actionRow}>
-                                    <TouchableOpacity
-                                        style={[styles.actionBtn, styles.rejectBtn]}
-                                        onPress={() => handleReject(req.id)}
-                                        disabled={processingId === req.id}
-                                    >
-                                        <Text style={styles.rejectBtnText}>Reject</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity
-                                        style={[styles.actionBtn, styles.approveBtn]}
-                                        onPress={() => handleApprove(req.id)}
-                                        disabled={processingId === req.id}
-                                    >
-                                        {processingId === req.id ? (
-                                            <ActivityIndicator size="small" color="white" />
-                                        ) : (
-                                            <Text style={styles.approveBtnText}>Approve</Text>
-                                        )}
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                        </ModernCard>
-                    ))
+                            </ModernCard>
+                        );
+                    })
                 )}
                 <View style={{ height: 40 }} />
             </ScrollView>
@@ -342,6 +369,17 @@ const createStyles = (theme: typeof THEME) => StyleSheet.create({
     rejectionLabel: { fontSize: 9, fontWeight: 'bold', color: theme.colors.error, marginBottom: 4 },
     rejectionText: { fontSize: 13, color: theme.colors.error, fontStyle: 'italic' },
     timestamp: { fontSize: 11, color: theme.colors.text.muted, marginTop: 8 },
+    tapForMore: { fontSize: 12, color: theme.colors.primary, marginTop: 8, fontStyle: 'italic' },
+    attachmentBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: theme.colors.primary + '10',
+        padding: 12,
+        borderRadius: 12,
+        marginTop: 8
+    },
+    attachmentBtnText: { color: theme.colors.primary, fontWeight: '600', fontSize: 14 },
     actionRow: { flexDirection: 'row', gap: 12, marginTop: 20 },
     actionBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
     rejectBtn: { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.colors.error },

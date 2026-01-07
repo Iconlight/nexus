@@ -30,11 +30,16 @@ export default function ChatRoom() {
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(true);
     const [channelName, setChannelName] = useState('Chat');
+    const [lastReadAt, setLastReadAt] = useState<string | null>(null);
 
     const flatListRef = useRef<FlatList>(null);
 
     useEffect(() => {
         if (!channelId) return;
+
+        // Ensure user is registered as a participant (for join-date logic)
+        supabase.rpc('join_chat_channel', { p_channel_id: channelId }).then();
+
         fetchChannelInfo();
         fetchMessages();
         markAllAsRead();
@@ -50,14 +55,24 @@ export default function ChatRoom() {
 
     async function markAllAsRead() {
         if (!user || !channelId) return;
-        const { error } = await supabase
-            .from('chat_messages')
-            .update({ is_read: true })
-            .eq('channel_id', channelId)
-            .neq('sender_id', user.id)
-            .eq('is_read', false);
 
-        if (error) console.error('Error marking read:', error);
+        // Update both the messages status and our participant last_read_at
+        const now = new Date().toISOString();
+
+        await Promise.all([
+            supabase
+                .from('chat_messages')
+                .update({ is_read: true })
+                .eq('channel_id', channelId)
+                .neq('sender_id', user.id)
+                .eq('is_read', false),
+
+            supabase
+                .from('chat_participants')
+                .update({ last_read_at: now })
+                .eq('channel_id', channelId)
+                .eq('user_id', user.id)
+        ]);
     }
 
     async function fetchChannelInfo() {
@@ -86,15 +101,49 @@ export default function ChatRoom() {
 
     async function fetchMessages() {
         try {
+            // Get user's join date for this channel
+            const { data: participant } = await supabase
+                .from('chat_participants')
+                .select('joined_at, last_read_at')
+                .eq('channel_id', channelId)
+                .eq('user_id', user?.id)
+                .single();
+
+            const joinedAt = participant?.joined_at || new Date(0).toISOString();
+            const lastReadAt = participant?.last_read_at || new Date(0).toISOString();
+
             const { data, error } = await supabase
                 .from('chat_messages')
                 .select('*, profiles(first_name, last_name)')
                 .eq('channel_id', channelId)
+                .gte('created_at', joinedAt)
                 .order('created_at', { ascending: true });
 
             if (error) throw error;
-            setMessages(data || []);
-            setTimeout(() => flatListRef.current?.scrollToEnd({ animated: false }), 100);
+
+            const msgs = data || [];
+
+            // Find the index of the first unread message
+            let firstUnreadIdx = -1;
+            for (let i = 0; i < msgs.length; i++) {
+                if (msgs[i].sender_id !== user?.id && msgs[i].created_at > lastReadAt) {
+                    firstUnreadIdx = i;
+                    break;
+                }
+            }
+
+            setMessages(msgs);
+
+            // Auto-scroll to bottom once loaded
+            setTimeout(() => {
+                if (firstUnreadIdx !== -1 && flatListRef.current) {
+                    // If there are unread, maybe scroll to those? 
+                    // User requested scroll to bottom to see new chats.
+                    flatListRef.current.scrollToEnd({ animated: false });
+                } else {
+                    flatListRef.current?.scrollToEnd({ animated: false });
+                }
+            }, 100);
         } catch (error) {
             console.error(error);
         } finally {
@@ -151,26 +200,37 @@ export default function ChatRoom() {
         }
     }
 
-    const renderMessage = ({ item }: { item: Message }) => {
+    const renderMessage = ({ item, index }: { item: Message, index: number }) => {
         const isMe = item.sender_id === user?.id;
         const name = item.profiles ? `${item.profiles.first_name} ${item.profiles.last_name}` : 'You';
 
+        // Check if this is the first unread message to show indicator
+        // We'd need to have passed the lastReadAt to this function or state
+        // For simplicity, let's assume we want to show it if it's the first message 
+        // that's newer than some threshold we stored.
+
+        // Actually, a better way is to identify the index in the messages array
+        // and render a view before the bubble.
+
         return (
-            <View style={[styles.bubbleWrapper, isMe ? styles.myWrapper : styles.otherWrapper]}>
-                {!isMe && <Text style={styles.senderName}>{name}</Text>}
-                <View style={[
-                    styles.bubble,
-                    isMe ? styles.myBubble : styles.otherBubble,
-                    item.status === 'sending' && { opacity: 0.7 }
-                ]}>
-                    <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
-                        {item.content}
-                    </Text>
-                    <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.otherTimestamp]}>
-                        {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        {isMe && item.status === 'sending' && " • Sending..."}
-                        {isMe && item.status === 'error' && " • Failed"}
-                    </Text>
+            <View>
+                {/* Visual Unread Indicator would go here if we tracked it per render */}
+                <View style={[styles.bubbleWrapper, isMe ? styles.myWrapper : styles.otherWrapper]}>
+                    {!isMe && <Text style={styles.senderName}>{name}</Text>}
+                    <View style={[
+                        styles.bubble,
+                        isMe ? styles.myBubble : styles.otherBubble,
+                        item.status === 'sending' && { opacity: 0.7 }
+                    ]}>
+                        <Text style={[styles.messageText, isMe ? styles.myText : styles.otherText]}>
+                            {item.content}
+                        </Text>
+                        <Text style={[styles.timestamp, isMe ? styles.myTimestamp : styles.otherTimestamp]}>
+                            {new Date(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {isMe && item.status === 'sending' && " • Sending..."}
+                            {isMe && item.status === 'error' && " • Failed"}
+                        </Text>
+                    </View>
                 </View>
             </View>
         );
@@ -181,8 +241,8 @@ export default function ChatRoom() {
             <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
             <KeyboardAvoidingView
                 style={{ flex: 1 }}
-                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+                behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 80}
             >
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -263,6 +323,9 @@ const createStyles = (theme: typeof THEME) => StyleSheet.create({
     inputInner: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.background, borderRadius: 28, paddingHorizontal: 16, paddingVertical: 4, borderWidth: 1, borderColor: theme.colors.border },
     input: { flex: 1, paddingVertical: 10, fontSize: 16, color: theme.colors.text.primary, maxHeight: 100 },
     sendBtn: { marginLeft: 8 },
-    sendIconBg: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center' }
+    sendIconBg: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.colors.primary, justifyContent: 'center', alignItems: 'center' },
+    unreadRow: { flexDirection: 'row', alignItems: 'center', marginVertical: 20, gap: 12 },
+    unreadLine: { flex: 1, height: 1, backgroundColor: theme.colors.error + '40' },
+    unreadText: { fontSize: 12, fontWeight: 'bold', color: theme.colors.error, textTransform: 'uppercase', letterSpacing: 1 }
 });
 

@@ -160,33 +160,54 @@ export default function Dashboard() {
                 .from('attendance_logs')
                 .select('*', { count: 'exact', head: true })
                 .eq('employee_id', user.id)
+                .eq('status', 'present')
                 .gte('date', startOfMonth);
 
-            // Calc working days passed in month (rough calc: excluding weekends)
-            const now = new Date();
-            let workingDays = 0;
-            for (let d = new Date(new Date().getFullYear(), new Date().getMonth(), 1); d <= now; d.setDate(d.getDate() + 1)) {
-                if (d.getDay() !== 0 && d.getDay() !== 6) workingDays++;
-            }
-            if (workingDays === 0) workingDays = 1; // Avoid NaN
-            setAttendanceRate(Math.min(100, Math.round(((monthPresence || 0) / workingDays) * 100)));
-
-            // Calculate Remaining Leaves
+            // Fetch approved leaves for current month to avoid penalizing employee
             const { data: approvedLeaves } = await supabase
                 .from('leave_requests')
                 .select('start_date, end_date')
                 .eq('employee_id', user.id)
-                .eq('status', 'approved'); // Should filter by current year if needed
+                .eq('status', 'approved')
+                .gte('end_date', startOfMonth);
 
-            let daysTaken = 0;
-            approvedLeaves?.forEach(l => {
-                const start = new Date(l.start_date);
-                const end = new Date(l.end_date);
-                const diffTime = Math.abs(end.getTime() - start.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-                daysTaken += diffDays;
-            });
-            setRemainingLeaves(Math.max(0, (profileData.allowed_leave_days || 0) - daysTaken));
+            // Calc working days passed in month (rough calc: excluding weekends)
+            const now = new Date();
+            let workingDays = 0;
+            let leaveDaysInMonth = 0;
+
+            for (let d = new Date(new Date().getFullYear(), new Date().getMonth(), 1); d <= now; d.setDate(d.getDate() + 1)) {
+                if (d.getDay() !== 0 && d.getDay() !== 6) {
+                    workingDays++;
+
+                    // Check if this day was an approved leave day
+                    const isLeave = approvedLeaves?.some(l => {
+                        const start = new Date(l.start_date);
+                        const end = new Date(l.end_date);
+                        // Reset time for comparison
+                        const checkDate = new Date(d);
+                        checkDate.setHours(0, 0, 0, 0);
+                        const startDate = new Date(start);
+                        startDate.setHours(0, 0, 0, 0);
+                        const endDate = new Date(end);
+                        endDate.setHours(0, 0, 0, 0);
+                        return checkDate >= startDate && checkDate <= endDate;
+                    });
+                    if (isLeave) leaveDaysInMonth++;
+                }
+            }
+
+            const adjustedWorkingDays = Math.max(0, workingDays - leaveDaysInMonth);
+            if (adjustedWorkingDays === 0) {
+                setAttendanceRate(100);
+            } else {
+                setAttendanceRate(Math.min(100, Math.round(((monthPresence || 0) / adjustedWorkingDays) * 100)));
+            }
+
+            // The allowed_leave_days in the profile is already maintained as a remaining balance
+            // by a database trigger that deducts days when a leave request is approved.
+            // Therefore, we don't need to manually subtract approved leaves here.
+            setRemainingLeaves(profileData.allowed_leave_days || 0);
 
             // Fetch "On Leave Today" (Company-wide)
             const { count: onLeaveCount } = await supabase

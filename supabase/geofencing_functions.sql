@@ -1,22 +1,44 @@
 -- Function: Update office location for a company
 -- This function safely updates the office location and radius
 
+-- Drop the existing function first to allow return type change
+DROP FUNCTION IF EXISTS update_office_location(UUID, DOUBLE PRECISION, DOUBLE PRECISION, INTEGER);
+
 CREATE OR REPLACE FUNCTION update_office_location(
     p_company_id UUID,
     p_latitude DOUBLE PRECISION,
     p_longitude DOUBLE PRECISION,
     p_radius INTEGER
 )
-RETURNS VOID
+RETURNS JSON
 LANGUAGE plpgsql
 SECURITY DEFINER
 AS $$
+DECLARE
+    v_rows_affected INT;
 BEGIN
     UPDATE companies
     SET 
         office_location = ST_SetSRID(ST_MakePoint(p_longitude, p_latitude), 4326)::geography,
         office_radius_meters = p_radius
     WHERE id = p_company_id;
+    
+    GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
+    
+    IF v_rows_affected = 0 THEN
+        RAISE EXCEPTION 'Company not found or no changes made';
+    END IF;
+    
+    RETURN json_build_object(
+        'success', true,
+        'message', 'Office location updated successfully'
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN json_build_object(
+            'success', false,
+            'message', SQLERRM
+        );
 END;
 $$;
 
