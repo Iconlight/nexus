@@ -1,16 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, SafeAreaView, StatusBar, ActivityIndicator } from 'react-native';
 import { supabase } from '../../src/services/supabase';
 import { useAuth } from '../../src/context/AuthContext';
+import { useTheme } from '../../src/context/ThemeContext';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
-import { THEME } from '../../src/constants/Theme';
+import { THEME as DEFAULT_THEME } from '../../src/constants/Theme';
 import { ModernCard } from '../../src/components/ModernCard';
 import { useRouter } from 'expo-router';
 
 export default function CheckIn() {
   const { user } = useAuth();
+  const { theme, isDark } = useTheme();
   const router = useRouter();
+  const styles = useMemo(() => createStyles(theme), [theme]);
+
   const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchingLocation, setFetchingLocation] = useState(true);
@@ -30,7 +34,7 @@ export default function CheckIn() {
     if (location) {
       checkDistanceToOffice();
     }
-  }, [location]);
+  }, [location, officeRadius]);
 
   async function requestLocationPermission() {
     try {
@@ -117,7 +121,10 @@ export default function CheckIn() {
 
       if (data !== null) {
         setDistanceToOffice(data);
-        setWithinRange(data <= officeRadius);
+        // GPS Accuracy handled here: we subtract accuracy from distance to give the user the benefit of the doubt
+        const accuracy = location.coords.accuracy || 0;
+        const adjustedDistance = Math.max(0, data - accuracy);
+        setWithinRange(adjustedDistance <= officeRadius);
       } else {
         setWithinRange(true);
       }
@@ -195,33 +202,33 @@ export default function CheckIn() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+          <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
         </TouchableOpacity>
         <TouchableOpacity onPress={requestLocationPermission} style={styles.refreshBtn}>
-          <Ionicons name="refresh" size={20} color={THEME.colors.primary} />
+          <Ionicons name="refresh" size={20} color={theme.colors.primary} />
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {errorMsg && (
           <View style={styles.errorBanner}>
-            <Ionicons name="alert-circle" size={20} color={THEME.colors.error} />
+            <Ionicons name="alert-circle" size={20} color={theme.colors.error} />
             <Text style={styles.errorText}>{errorMsg}</Text>
           </View>
         )}
 
         <ModernCard style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="location" size={24} color={THEME.colors.primary} />
+            <Ionicons name="location" size={24} color={theme.colors.primary} />
             <Text style={styles.cardTitle}>Current Position</Text>
           </View>
 
           {fetchingLocation ? (
             <View style={styles.locLoading}>
-              <ActivityIndicator color={THEME.colors.primary} />
+              <ActivityIndicator color={theme.colors.primary} />
               <Text style={styles.locLoadingText}>Acquiring GPS Signal...</Text>
             </View>
           ) : location ? (
@@ -250,14 +257,14 @@ export default function CheckIn() {
               <Ionicons
                 name={withinRange ? "checkmark-circle" : "close-circle"}
                 size={28}
-                color={withinRange ? THEME.colors.success : THEME.colors.error}
+                color={withinRange ? theme.colors.success : theme.colors.error}
               />
-              <View>
-                <Text style={[styles.rangeTitle, { color: withinRange ? THEME.colors.success : THEME.colors.error }]}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.rangeTitle, { color: withinRange ? theme.colors.success : theme.colors.error }]}>
                   {withinRange ? "Within Range" : "Out of Range"}
                 </Text>
                 <Text style={styles.rangeSub}>
-                  {Math.round(distanceToOffice)}m from office (Limit: {officeRadius}m)
+                  {Math.round(distanceToOffice || 0)}m from office (Limit: {officeRadius}m, Precision: ±{location?.coords.accuracy?.toFixed(0)}m)
                 </Text>
               </View>
             </View>
@@ -266,7 +273,7 @@ export default function CheckIn() {
 
         <ModernCard style={styles.card}>
           <View style={styles.cardHeader}>
-            <Ionicons name="time" size={24} color={THEME.colors.info} />
+            <Ionicons name="time" size={24} color={theme.colors.info} />
             <Text style={styles.cardTitle}>Today's Logs</Text>
           </View>
 
@@ -289,7 +296,7 @@ export default function CheckIn() {
             </View>
           ) : (
             <View style={styles.emptyLog}>
-              <Ionicons name="calendar-outline" size={32} color={THEME.colors.text.muted} />
+              <Ionicons name="calendar-outline" size={32} color={theme.colors.text.muted} />
               <Text style={styles.emptyLogText}>No logs recorded for today yet.</Text>
             </View>
           )}
@@ -298,7 +305,7 @@ export default function CheckIn() {
         <View style={styles.actions}>
           {!todayAttendance && (
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: withinRange ? THEME.colors.primary : THEME.colors.text.muted }]}
+              style={[styles.actionBtn, { backgroundColor: withinRange ? theme.colors.primary : theme.colors.text.muted }]}
               onPress={handleCheckIn}
               disabled={loading || fetchingLocation || !withinRange}
             >
@@ -313,7 +320,7 @@ export default function CheckIn() {
 
           {todayAttendance && !todayAttendance.check_out_time && (
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: THEME.colors.error }]}
+              style={[styles.actionBtn, { backgroundColor: theme.colors.error }]}
               onPress={handleCheckOut}
               disabled={loading}
             >
@@ -328,7 +335,7 @@ export default function CheckIn() {
 
           {todayAttendance?.check_out_time && (
             <View style={styles.doneContainer}>
-              <Ionicons name="checkmark-circle" size={48} color={THEME.colors.success} />
+              <Ionicons name="checkmark-circle" size={48} color={theme.colors.success} />
               <Text style={styles.doneText}>Workday Completed</Text>
               <Text style={styles.doneSub}>See you tomorrow!</Text>
             </View>
@@ -339,54 +346,54 @@ export default function CheckIn() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: THEME.colors.background },
+const createStyles = (theme: any) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.colors.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: THEME.spacing.lg,
-    paddingVertical: THEME.spacing.md,
-    backgroundColor: 'white',
+    paddingHorizontal: 24,
+    paddingVertical: 16,
+    backgroundColor: theme.colors.card,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: theme.colors.border,
   },
-  backBtn: { padding: 8, borderRadius: 12, backgroundColor: '#f8f9fa' },
-  refreshBtn: { padding: 8, borderRadius: 12, backgroundColor: THEME.colors.primary + '10' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: THEME.colors.text.primary },
-  scrollContent: { padding: THEME.spacing.lg },
+  backBtn: { padding: 8, borderRadius: 12, backgroundColor: theme.colors.background },
+  refreshBtn: { padding: 8, borderRadius: 12, backgroundColor: theme.colors.primary + '10' },
+  headerTitle: { fontSize: 18, fontWeight: 'bold', color: theme.colors.text.primary },
+  scrollContent: { padding: 24 },
   errorBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: THEME.colors.error + '10',
+    backgroundColor: theme.colors.error + '10',
     padding: 12,
     borderRadius: 12,
     gap: 8,
     marginBottom: 20
   },
-  errorText: { color: THEME.colors.error, fontSize: 13, fontWeight: '600' },
-  card: { padding: 20, marginBottom: 20 },
+  errorText: { color: theme.colors.error, fontSize: 13, fontWeight: '600' },
+  card: { padding: 20, marginBottom: 20, backgroundColor: theme.colors.card },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
-  cardTitle: { fontSize: 16, fontWeight: 'bold', color: THEME.colors.text.primary },
+  cardTitle: { fontSize: 16, fontWeight: 'bold', color: theme.colors.text.primary },
   locLoading: { alignItems: 'center', paddingVertical: 10 },
-  locLoadingText: { marginTop: 8, color: THEME.colors.text.muted, fontSize: 12 },
+  locLoadingText: { marginTop: 8, color: theme.colors.text.muted, fontSize: 12 },
   locInfo: { gap: 12 },
   locRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  locLabel: { fontSize: 13, color: THEME.colors.text.muted, fontWeight: '500' },
-  locValue: { fontSize: 14, fontWeight: 'bold', color: THEME.colors.text.primary },
-  emptyText: { textAlign: 'center', color: THEME.colors.text.muted, fontSize: 14 },
-  statusCard: { padding: 16, marginBottom: 20 },
+  locLabel: { fontSize: 13, color: theme.colors.text.muted, fontWeight: '500' },
+  locValue: { fontSize: 14, fontWeight: 'bold', color: theme.colors.text.primary },
+  emptyText: { textAlign: 'center', color: theme.colors.text.muted, fontSize: 14 },
+  statusCard: { padding: 16, marginBottom: 20, backgroundColor: theme.colors.card },
   rangeHeader: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   rangeTitle: { fontSize: 18, fontWeight: 'bold' },
-  rangeSub: { fontSize: 12, color: THEME.colors.text.secondary, marginTop: 2 },
-  rangeSuccess: { backgroundColor: THEME.colors.success + '10', borderColor: THEME.colors.success + '30', borderWidth: 1 },
-  rangeDanger: { backgroundColor: THEME.colors.error + '10', borderColor: THEME.colors.error + '30', borderWidth: 1 },
+  rangeSub: { fontSize: 12, color: theme.colors.text.secondary, marginTop: 2 },
+  rangeSuccess: { backgroundColor: theme.colors.success + '10', borderColor: theme.colors.success + '30', borderWidth: 1 },
+  rangeDanger: { backgroundColor: theme.colors.error + '10', borderColor: theme.colors.error + '30', borderWidth: 1 },
   logContainer: { paddingVertical: 4 },
   logItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  logLabel: { fontSize: 14, color: THEME.colors.text.secondary, fontWeight: '500' },
-  logValue: { fontSize: 20, fontWeight: 'bold', color: THEME.colors.text.primary },
+  logLabel: { fontSize: 14, color: theme.colors.text.secondary, fontWeight: '500' },
+  logValue: { fontSize: 20, fontWeight: 'bold', color: theme.colors.text.primary },
   emptyLog: { alignItems: 'center', paddingVertical: 20, gap: 12 },
-  emptyLogText: { color: THEME.colors.text.muted, fontSize: 13 },
+  emptyLogText: { color: theme.colors.text.muted, fontSize: 13 },
   actions: { marginTop: 10 },
   actionBtn: {
     flexDirection: 'row',
@@ -403,6 +410,6 @@ const styles = StyleSheet.create({
   },
   actionBtnText: { color: 'white', fontWeight: 'bold', fontSize: 18, letterSpacing: 1 },
   doneContainer: { alignItems: 'center', paddingVertical: 40, gap: 8 },
-  doneText: { fontSize: 22, fontWeight: 'bold', color: THEME.colors.text.primary },
-  doneSub: { fontSize: 14, color: THEME.colors.text.secondary }
+  doneText: { fontSize: 22, fontWeight: 'bold', color: theme.colors.text.primary },
+  doneSub: { fontSize: 14, color: theme.colors.text.secondary }
 });

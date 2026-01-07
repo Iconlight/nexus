@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator
 import { useAuth } from '../../src/context/AuthContext';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { supabase } from '../../src/services/supabase';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../src/context/ThemeContext';
 import { THEME } from '../../src/constants/Theme';
@@ -251,9 +251,11 @@ export default function Dashboard() {
         }
     }, [user]);
 
-    useEffect(() => {
-        loadDashboardData();
-    }, [loadDashboardData]);
+    useFocusEffect(
+        useCallback(() => {
+            loadDashboardData();
+        }, [loadDashboardData])
+    );
 
     const onRefresh = () => {
         setRefreshing(true);
