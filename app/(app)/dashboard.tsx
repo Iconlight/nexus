@@ -42,6 +42,7 @@ export default function Dashboard() {
     const [daysPresent, setDaysPresent] = useState<number>(0);
     const [attendanceRate, setAttendanceRate] = useState<number>(100);
     const [onLeaveTodayCount, setOnLeaveTodayCount] = useState<number>(0);
+    const [pendingRequestsCount, setPendingRequestsCount] = useState<number>(0);
 
     // User List Modal State
     const [listModalVisible, setListModalVisible] = useState(false);
@@ -82,7 +83,7 @@ export default function Dashboard() {
                 // Fetch approved leaves overlapping today
                 const { data: leaves, error } = await supabase
                     .from('leave_requests')
-                    .select('start_date, end_date, leave_type, employee:profiles!employee_id(id, first_name, last_name, email)')
+                    .select('start_date, end_date, leave_type, employee:profiles!leave_requests_employee_id_fkey(id, first_name, last_name, email)')
                     .eq('status', 'approved')
                     .lte('start_date', today)
                     .gte('end_date', today);
@@ -115,6 +116,9 @@ export default function Dashboard() {
         }
 
         try {
+            // Proactive cleanup of hanging check-ins from previous days
+            await supabase.rpc('close_previous_day_checkins', { p_employee_id: user.id });
+
             // 1. Load profile & basic stats
             const { data: profileData, error: profileError } = await supabase
                 .from('profiles')
@@ -242,6 +246,39 @@ export default function Dashboard() {
                 setLatestPayslip(monthName);
             }
 
+            // 5. Load pending leave requests for notification dot
+            let requestsQuery = supabase
+                .from('leave_requests')
+                .select('*', { count: 'exact', head: true })
+                .eq('status', 'pending');
+
+            if (profileData.role === 'manager' && profileData.team_id) {
+                // For managers, we need to filter by their team members
+                // First get team member IDs
+                const { data: teamMembers } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('team_id', profileData.team_id);
+
+                if (teamMembers && teamMembers.length > 0) {
+                    requestsQuery = requestsQuery.in('employee_id', teamMembers.map(m => m.id));
+                } else {
+                    // No members, no pending requests
+                    setPendingRequestsCount(0);
+                    return;
+                }
+            } else if (['admin', 'ceo', 'hr'].includes(profileData.role)) {
+                // For company-wide roles, filter by company_id
+                requestsQuery = requestsQuery.eq('company_id', profileData.company_id);
+            } else {
+                // Regular employees don't see notifications for others
+                setPendingRequestsCount(0);
+                return;
+            }
+
+            const { count: pendingCount } = await requestsQuery;
+            setPendingRequestsCount(pendingCount || 0);
+
         } catch (err: any) {
             console.error('Error loading dashboard data:', err);
             setError(err.message);
@@ -278,9 +315,14 @@ export default function Dashboard() {
                     <Ionicons name="alert-circle" size={48} color={theme.colors.error} />
                     <Text style={styles.errorTitle}>Error Loading Dashboard</Text>
                     <Text style={styles.errorText}>{error || 'Profile not found'}</Text>
-                    <TouchableOpacity style={styles.retryBtn} onPress={loadDashboardData}>
-                        <Text style={styles.retryBtnText}>Retry</Text>
-                    </TouchableOpacity>
+                    <View style={styles.errorActions}>
+                        <TouchableOpacity style={styles.retryBtn} onPress={loadDashboardData}>
+                            <Text style={styles.retryBtnText}>Retry</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.signOutErrorBtn} onPress={signOut}>
+                            <Text style={styles.signOutErrorBtnText}>Sign Out</Text>
+                        </TouchableOpacity>
+                    </View>
                 </ModernCard>
             </View>
         );
@@ -452,6 +494,7 @@ export default function Dashboard() {
                             <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/(app)/approvals')}>
                                 <View style={[styles.actionIconBox, { backgroundColor: theme.colors.success + '15' }]}>
                                     <Ionicons name="checkmark-circle" size={24} color={theme.colors.success} />
+                                    {pendingRequestsCount > 0 && <View style={styles.redDot} />}
                                 </View>
                                 <Text style={styles.actionBtnText}>Approvals</Text>
                             </TouchableOpacity>
@@ -521,6 +564,7 @@ const createStyles = (theme: typeof THEME) => StyleSheet.create({
     actionBtn: { alignItems: 'center', width: '28%' },
     actionIconBox: { width: 56, height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
     actionBtnText: { fontSize: 11, fontWeight: '600', color: theme.colors.text.secondary, textAlign: 'center' },
+    redDot: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: theme.colors.error, borderWidth: 2, borderColor: theme.colors.card },
     financeCard: { padding: theme.spacing.lg, marginBottom: theme.spacing.xl, backgroundColor: theme.colors.card, borderColor: theme.colors.primary + '10', borderWidth: 1 },
     financeHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.lg },
     financeTitle: { fontSize: 16, fontWeight: '700', color: theme.colors.text.primary, marginLeft: 12 },
@@ -529,8 +573,11 @@ const createStyles = (theme: typeof THEME) => StyleSheet.create({
     errorCard: { padding: theme.spacing.xl, alignItems: 'center' },
     errorTitle: { fontSize: 20, fontWeight: 'bold', color: theme.colors.text.primary, marginTop: 16 },
     errorText: { fontSize: 14, color: theme.colors.text.secondary, textAlign: 'center', marginVertical: 16 },
-    retryBtn: { backgroundColor: theme.colors.primary, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12 },
-    retryBtnText: { color: 'white', fontWeight: 'bold' },
+    retryBtn: { backgroundColor: theme.colors.primary, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12, flex: 1 },
+    retryBtnText: { color: 'white', fontWeight: 'bold', textAlign: 'center' },
+    errorActions: { flexDirection: 'row', gap: 12, width: '100%', marginTop: 8 },
+    signOutErrorBtn: { backgroundColor: theme.colors.background, borderWidth: 1, borderColor: theme.colors.border, paddingHorizontal: 32, paddingVertical: 12, borderRadius: 12, flex: 1 },
+    signOutErrorBtnText: { color: theme.colors.text.secondary, fontWeight: 'bold', textAlign: 'center' },
     goalCard: { padding: theme.spacing.lg, marginBottom: theme.spacing.xl },
     goalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginBottom: 20 },
     goalTitle: { fontSize: 18, fontWeight: '700', color: theme.colors.text.primary },

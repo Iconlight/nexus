@@ -61,8 +61,7 @@ export default function Approvals() {
                         last_name,
                         email,
                         team_id
-                    ),
-                    attachment_url
+                    )
                 `)
                 .eq('company_id', profile.company_id)
                 .order('created_at', { ascending: false });
@@ -250,7 +249,7 @@ export default function Approvals() {
                                         </View>
                                     </View>
 
-                                    <View style={styles.divider} />
+                                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
 
                                     <View style={styles.detailsGroup}>
                                         <View style={styles.typeRow}>
@@ -351,8 +350,8 @@ const createStyles = (theme: typeof THEME) => StyleSheet.create({
     employeeEmail: { fontSize: 12, color: theme.colors.text.muted, marginTop: 2 },
     statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
     statusText: { fontSize: 10, fontWeight: 'bold' },
-    pendingBadge: { backgroundColor: '#FFF3E0' },
-    pendingText: { color: '#E65100' },
+    pendingBadge: { backgroundColor: theme.colors.warning + '20' },
+    pendingText: { color: theme.colors.warning },
     approvedBadge: { backgroundColor: theme.colors.success + '15' },
     approvedText: { color: theme.colors.success },
     rejectedBadge: { backgroundColor: theme.colors.error + '10' },
@@ -362,10 +361,10 @@ const createStyles = (theme: typeof THEME) => StyleSheet.create({
     typeRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     leaveType: { fontSize: 12, fontWeight: 'bold', color: theme.colors.primary, letterSpacing: 0.5 },
     dates: { fontSize: 16, fontWeight: '700', color: theme.colors.text.primary },
-    reasonBox: { backgroundColor: theme.colors.background, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border },
+    reasonBox: { backgroundColor: theme.colors.card, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border },
     reasonLabel: { fontSize: 9, fontWeight: 'bold', color: theme.colors.text.muted, marginBottom: 4 },
     reasonText: { fontSize: 13, color: theme.colors.text.secondary, lineHeight: 18 },
-    rejectionBox: { backgroundColor: theme.colors.error + '05', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.error + '10' },
+    rejectionBox: { backgroundColor: theme.colors.error + '10', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.error + '20' },
     rejectionLabel: { fontSize: 9, fontWeight: 'bold', color: theme.colors.error, marginBottom: 4 },
     rejectionText: { fontSize: 13, color: theme.colors.error, fontStyle: 'italic' },
     timestamp: { fontSize: 11, color: theme.colors.text.muted, marginTop: 8 },

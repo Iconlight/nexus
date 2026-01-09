@@ -57,6 +57,9 @@ export default function CheckIn() {
 
   async function loadTodayAttendance() {
     try {
+      // Proactive cleanup of hanging check-ins from previous days
+      await supabase.rpc('close_previous_day_checkins', { p_employee_id: user?.id });
+
       const today = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('attendance_logs')

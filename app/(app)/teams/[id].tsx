@@ -65,13 +65,21 @@ export default function DepartmentDetail() {
                 setEligibleManagers(allStaff || []);
             }
 
-            const { data: requests } = await supabase
-                .from('leave_requests')
-                .select('id, start_date, end_date, type, status, reason, attachment_url, reviewer_note, profiles:employee_id (first_name, last_name)')
-                .eq('status', 'pending')
-                .in('employee_id', membersData?.map(m => m.id) || [])
-                .order('start_date');
-            setLeaveRequests(requests || []);
+            if (membersData && membersData.length > 0) {
+                const { data: requests, error: requestsError } = await supabase
+                    .from('leave_requests')
+                    .select('id, start_date, end_date, leave_type, status, reason, attachment_url, reviewer_note, profiles!leave_requests_employee_id_fkey (first_name, last_name)')
+                    .eq('status', 'pending')
+                    .in('employee_id', membersData.map(m => m.id))
+                    .order('start_date');
+
+                if (requestsError) {
+                    console.error('Leave requests error:', requestsError);
+                }
+                setLeaveRequests(requests || []);
+            } else {
+                setLeaveRequests([]);
+            }
 
         } catch (error) {
             console.error('Error loading team:', error);
@@ -209,10 +217,10 @@ export default function DepartmentDetail() {
                                     <ModernCard style={styles.requestCard}>
                                         <View style={styles.reqHeader}>
                                             <Text style={styles.reqName}>{req.profiles.first_name} {req.profiles.last_name}</Text>
-                                            <View style={styles.reqBadge}><Text style={styles.reqBadgeText}>{req.type}</Text></View>
+                                            <View style={styles.reqBadge}><Text style={styles.reqBadgeText}>{req.leave_type}</Text></View>
                                         </View>
                                         <Text style={styles.reqDates}>{new Date(req.start_date).toLocaleDateString()} - {new Date(req.end_date).toLocaleDateString()}</Text>
-                                        <Text style={styles.reqReason} numberOfLines={2}>{req.reason || 'No reason provided'}</Text>
+                                        <Text style={styles.reqReason} numberOfLines={2}>{!!req.reason ? req.reason : 'No reason provided'}</Text>
                                         <View style={styles.reqFooter}>
                                             <Text style={styles.reqActionHint}>View Request</Text>
                                             {req.attachment_url && <Ionicons name="attach" size={16} color={theme.colors.text.muted} />}

@@ -170,7 +170,7 @@ export default function DepartmentCalendar() {
                     <Text style={styles.sectionTitle}>
                         {selectedDate ? `Activities for ${selectedDate}` : 'Select a date'}
                     </Text>
-                    {selectedDate && (
+                    {!!selectedDate && (
                         <Button title="Add Activity" onPress={() => setModalVisible(true)} color={theme.colors.primary} />
                     )}
                 </View>
@@ -182,7 +182,7 @@ export default function DepartmentCalendar() {
                         selectedDayActivities.map(act => (
                             <View key={act.id} style={styles.card}>
                                 <Text style={styles.cardTitle}>{act.title}</Text>
-                                {act.description && <Text style={styles.cardDesc}>{act.description}</Text>}
+                                {!!act.description && <Text style={styles.cardDesc}>{act.description}</Text>}
                             </View>
                         ))
                     )}

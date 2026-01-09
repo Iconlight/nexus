@@ -101,22 +101,20 @@ export default function ChatRoom() {
 
     async function fetchMessages() {
         try {
-            // Get user's join date for this channel
+            // Get user's last_read_at for unread indicator logic
             const { data: participant } = await supabase
                 .from('chat_participants')
-                .select('joined_at, last_read_at')
+                .select('last_read_at')
                 .eq('channel_id', channelId)
                 .eq('user_id', user?.id)
-                .single();
+                .maybeSingle();
 
-            const joinedAt = participant?.joined_at || new Date(0).toISOString();
             const lastReadAt = participant?.last_read_at || new Date(0).toISOString();
 
             const { data, error } = await supabase
                 .from('chat_messages')
                 .select('*, profiles(first_name, last_name)')
                 .eq('channel_id', channelId)
-                .gte('created_at', joinedAt)
                 .order('created_at', { ascending: true });
 
             if (error) throw error;
@@ -160,16 +158,21 @@ export default function ChatRoom() {
             }
 
             setMessages(prev => {
-                // Find optimistic message mainly by content and "sending" status
-                // We relax the check to ensure we find it
-                const optimisticIdx = prev.findIndex(m => m.status === 'sending' && m.content === data.content);
+                // Find optimistic message by content and sender_id if it's still marked as sending or has a temp ID
+                const optimisticIdx = prev.findIndex(m =>
+                    (m.id.toString().startsWith('optimistic-') || m.status === 'sending') &&
+                    m.content === data.content &&
+                    m.sender_id === data.sender_id
+                );
 
                 if (optimisticIdx !== -1) {
                     const newMsgs = [...prev];
+                    // Replace optimistic message with the real one from DB
                     newMsgs[optimisticIdx] = { ...data, status: 'sent' };
                     return newMsgs;
                 }
-                // Check if already exists by ID to avoid duplicates
+
+                // Final check to avoid duplicates by real ID
                 if (prev.find(m => m.id === data.id)) return prev;
                 return [...prev, { ...data, status: 'sent' }];
             });
