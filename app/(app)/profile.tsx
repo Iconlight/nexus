@@ -4,6 +4,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { THEME } from '../../src/constants/Theme';
+import { useTheme } from '../../src/context/ThemeContext';
 import { ModernCard } from '../../src/components/ModernCard';
 import { useState, useEffect } from 'react';
 import { supabase } from '../../src/services/supabase';
@@ -30,12 +31,14 @@ export default function ProfileScreen() {
 
     if (!profile) return null;
 
+    const { theme, isDark } = useTheme();
+
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: THEME.colors.background }}>
-            <StatusBar barStyle="dark-content" />
-            <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-                    <Ionicons name="arrow-back" size={24} color={THEME.colors.text.primary} />
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+            <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+            <View style={[styles.header, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }]}>
+                <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: theme.colors.background }]}>
+                    <Ionicons name="arrow-back" size={24} color={theme.colors.text.primary} />
                 </TouchableOpacity>
                 <View style={{ width: 40 }} />
             </View>
@@ -45,27 +48,27 @@ export default function ProfileScreen() {
                     <View style={styles.avatar}>
                         <Text style={styles.avatarText}>{profile.first_name[0]}{profile.last_name[0]}</Text>
                     </View>
-                    <Text style={styles.name}>{profile.first_name} {profile.last_name}</Text>
-                    <Text style={styles.email}>{profile.email}</Text>
-                    <View style={[styles.roleBadge, { backgroundColor: THEME.colors.primary + '15' }]}>
-                        <Text style={[styles.roleText, { color: THEME.colors.primary }]}>{profile.role.toUpperCase()}</Text>
+                    <Text style={[styles.name, { color: theme.colors.text.primary }]}>{profile.first_name} {profile.last_name}</Text>
+                    <Text style={[styles.email, { color: theme.colors.text.secondary }]}>{profile.email}</Text>
+                    <View style={[styles.roleBadge, { backgroundColor: theme.colors.primary + '15' }]}>
+                        <Text style={[styles.roleText, { color: theme.colors.primary }]}>{profile.role.toUpperCase()}</Text>
                     </View>
                 </View>
 
                 <ModernCard style={styles.infoSection}>
                     <View style={styles.infoRow}>
-                        <Ionicons name="briefcase-outline" size={20} color={THEME.colors.text.secondary} />
+                        <Ionicons name="briefcase-outline" size={20} color={theme.colors.text.secondary} />
                         <View style={styles.infoText}>
-                            <Text style={styles.label}>Job Title</Text>
-                            <Text style={styles.value}>{profile.job_title || 'Not specified'}</Text>
+                            <Text style={[styles.label, { color: theme.colors.text.muted }]}>Job Title</Text>
+                            <Text style={[styles.value, { color: theme.colors.text.primary }]}>{profile.job_title || 'Not specified'}</Text>
                         </View>
                     </View>
-                    <View style={styles.divider} />
+                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
                     <View style={styles.infoRow}>
-                        <Ionicons name="business-outline" size={20} color={THEME.colors.text.secondary} />
+                        <Ionicons name="business-outline" size={20} color={theme.colors.text.secondary} />
                         <View style={styles.infoText}>
-                            <Text style={styles.label}>Organization</Text>
-                            <Text style={styles.value}>{profile.company?.name || 'Nexus'}</Text>
+                            <Text style={[styles.label, { color: theme.colors.text.muted }]}>Organization</Text>
+                            <Text style={[styles.value, { color: theme.colors.text.primary }]}>{profile.company?.name || 'Nexus'}</Text>
                         </View>
                     </View>
                 </ModernCard>
@@ -75,7 +78,7 @@ export default function ProfileScreen() {
                     <Text style={styles.signOutBtnText}>Sign Out</Text>
                 </TouchableOpacity>
 
-                <Text style={styles.version}>Nexus v1.2.0</Text>
+                <Text style={[styles.version, { color: theme.colors.text.muted }]}>Nexus v1.2.0</Text>
             </ScrollView>
         </SafeAreaView>
     );
@@ -88,19 +91,11 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: THEME.spacing.lg,
         paddingVertical: THEME.spacing.md,
-        backgroundColor: 'white',
         borderBottomWidth: 1,
-        borderBottomColor: '#eee',
     },
     backBtn: {
         padding: 8,
         borderRadius: 12,
-        backgroundColor: '#f5f5f5',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: THEME.colors.text.primary,
     },
     content: {
         padding: THEME.spacing.lg,
@@ -131,11 +126,9 @@ const styles = StyleSheet.create({
     name: {
         fontSize: 24,
         fontWeight: 'bold',
-        color: THEME.colors.text.primary,
     },
     email: {
         fontSize: 14,
-        color: THEME.colors.text.secondary,
         marginTop: 4,
     },
     roleBadge: {
@@ -163,17 +156,14 @@ const styles = StyleSheet.create({
     },
     label: {
         fontSize: 12,
-        color: THEME.colors.text.muted,
     },
     value: {
         fontSize: 16,
         fontWeight: '600',
-        color: THEME.colors.text.primary,
         marginTop: 2,
     },
     divider: {
         height: 1,
-        backgroundColor: '#eee',
         marginVertical: 16,
     },
     signOutBtn: {
@@ -193,7 +183,6 @@ const styles = StyleSheet.create({
     },
     version: {
         marginTop: THEME.spacing.xl,
-        color: THEME.colors.text.muted,
         fontSize: 12,
     }
 });
