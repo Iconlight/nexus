@@ -280,41 +280,54 @@ export default function Payroll() {
         const distinctMonths = new Set(filteredRecords.filter(p => p.status === 'draft').map(p => p.month));
 
         if (distinctMonths.size > 1) {
-            Alert.alert('Consolidate Filters', 'Please filter by a specific Month to publish all drafts at once.');
+            const msg = 'Please filter by a specific Month to publish all drafts at once.';
+            Platform.OS === 'web' ? alert(msg) : Alert.alert('Consolidate Filters', msg);
             return;
         }
 
         const targetMonth = Array.from(distinctMonths)[0];
         if (!targetMonth) return; // No drafts
 
-        Alert.alert(
-            'Publish All?',
-            `Publish ${analytics.draftCount} draft payrolls for ${targetMonth}?`,
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Publish',
-                    style: 'destructive',
-                    onPress: async () => {
-                        setPublishingAll(true);
-                        try {
-                            const { error } = await supabase.rpc('publish_all_payrolls', {
-                                p_month: targetMonth
-                            });
+        const confirmMessage = `Publish ${analytics.draftCount} draft payrolls for ${targetMonth}?`;
 
-                            if (error) throw error;
+        const proceed = async () => {
+            setPublishingAll(true);
+            try {
+                const { error } = await supabase.rpc('publish_all_payrolls', {
+                    p_month: targetMonth
+                });
 
-                            Alert.alert('Success', 'All draft payrolls have been published.');
-                            loadData();
-                        } catch (error: any) {
-                            Alert.alert('Error', error.message || 'Failed to publish all payrolls');
-                        } finally {
-                            setPublishingAll(false);
-                        }
+                if (error) throw error;
+
+                const msg = 'All draft payrolls have been published.';
+                Platform.OS === 'web' ? alert(msg) : Alert.alert('Success', msg);
+                loadData();
+            } catch (error: any) {
+                const msg = error.message || 'Failed to publish all payrolls';
+                Platform.OS === 'web' ? alert(msg) : Alert.alert('Error', msg);
+            } finally {
+                setPublishingAll(false);
+            }
+        };
+
+        if (Platform.OS === 'web') {
+            if (window.confirm(confirmMessage)) {
+                await proceed();
+            }
+        } else {
+            Alert.alert(
+                'Publish All?',
+                confirmMessage,
+                [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                        text: 'Publish',
+                        style: 'destructive',
+                        onPress: proceed
                     }
-                }
-            ]
-        );
+                ]
+            );
+        }
     }
 
     if (loading) {

@@ -14,8 +14,8 @@ type Channel = {
     type: 'department' | 'admin_support' | 'dm';
     participant_a?: string;
     participant_b?: string;
-    profiles_a?: { first_name: string; last_name: string };
-    profiles_b?: { first_name: string; last_name: string };
+    profiles_a?: { first_name: string; last_name: string; role?: string };
+    profiles_b?: { first_name: string; last_name: string; role?: string };
     isPotential?: boolean;
     partner_id?: string;
     unread_count?: number;
@@ -38,12 +38,12 @@ export default function ChatList() {
     async function fetchChannels() {
         if (!user) return;
         try {
-            const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+            const { data: profile } = await supabase.from('profiles').select('role, company_id').eq('id', user.id).single();
             const myRole = profile?.role;
 
             const { data: existing, error } = await supabase
                 .from('chat_channels')
-                .select('*, profiles_a:participant_a(first_name, last_name), profiles_b:participant_b(first_name, last_name)')
+                .select('*, profiles_a:participant_a(first_name, last_name, role), profiles_b:participant_b(first_name, last_name, role)')
                 .order('updated_at', { ascending: false });
 
             if (error) throw error;
@@ -62,26 +62,50 @@ export default function ChatList() {
 
             let potentialPartners: any[] = [];
             if (myRole === 'admin' || myRole === 'ceo' || myRole === 'hr') {
-                const { data: managers } = await supabase.from('profiles').select('id, first_name, last_name, role').eq('role', 'manager').eq('is_active', true);
+                const { data: managers } = await supabase
+                    .from('profiles')
+                    .select('id, first_name, last_name, role')
+                    .eq('role', 'manager')
+                    .eq('company_id', profile.company_id)
+                    .eq('is_active', true);
                 potentialPartners = managers || [];
             } else if (myRole === 'manager') {
-                const { data: admins } = await supabase.from('profiles').select('id, first_name, last_name, role').in('role', ['admin', 'ceo', 'hr']).eq('is_active', true);
+                const { data: admins } = await supabase
+                    .from('profiles')
+                    .select('id, first_name, last_name, role')
+                    .in('role', ['admin', 'ceo', 'hr'])
+                    .eq('company_id', profile.company_id)
+                    .eq('is_active', true);
                 potentialPartners = admins || [];
             }
 
             const activeIds = new Set();
             const results: Channel[] = [];
             existing?.forEach(ch => {
-                const chWithCount = { ...ch, unread_count: unreadMap[ch.id] || 0 };
-                if (ch.type === 'dm') {
+                const isDM = ch.type === 'dm';
+
+                // --- SECURITY FILTER START ---
+                // 1. Cross-Company Check: If company_id is present on channel, it must match.
+                // Assuming RLS usually handles this, but for extra safety + older channels:
+                if (ch.company_id && ch.company_id !== profile.company_id) return;
+
+                // 2. Role-Based Visibility for DMs
+                if (isDM && ch.participant_a && ch.participant_b) {
                     const partnerId = ch.participant_a === user.id ? ch.participant_b : ch.participant_a;
-                    if (partnerId && partnerId !== user.id) {
-                        activeIds.add(partnerId);
-                        results.push(chWithCount);
+                    const partnerProfile = ch.participant_a === user.id ? ch.profiles_b : ch.profiles_a;
+
+                    if ((myRole === 'admin' || myRole === 'ceo' || myRole === 'hr') && partnerProfile?.role) {
+                        const partnerRole = partnerProfile.role;
+                        const isLeader = ['admin', 'ceo', 'hr', 'manager'].includes(partnerRole);
+                        if (!isLeader) return;
                     }
-                } else {
-                    results.push(chWithCount);
+
+                    activeIds.add(partnerId);
                 }
+                // --- SECURITY FILTER END ---
+
+                const chWithCount = { ...ch, unread_count: unreadMap[ch.id] || 0 };
+                results.push(chWithCount);
             });
 
             potentialPartners.forEach(p => {
